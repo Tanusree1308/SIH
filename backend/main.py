@@ -12,7 +12,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 import database, models, security,  services, config
 from config import settings
-from .services.analysis_service import AnalysisService # Adjust the path if needed
+from services.analysis_service import AnalysisService # Adjust the path if needed
 
 
 # --- App Initialization ---
