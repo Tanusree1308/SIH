@@ -126,16 +126,13 @@ class AnalysisService:
             raise ValueError("Failed to crop image.")
         
         keypoints = self._get_keypoints_with_tflite(cropped_image)
-        scores = self._calculate_atp_scores(keypoints)
+        scores = self._calculate_atp_scores(keypoints) # This now calls the corrected method
 
         # --- Image Annotation Logic ---
         annotated_image = image.copy()
         cv2.rectangle(annotated_image, (x1, y1), (x2, y2), (0, 255, 0), 3)
-        # ... (rest of your annotation logic is fine) ...
         base, _ = os.path.splitext(os.path.basename(image_path))
         annotated_filename = f"{base}-annotated.jpg"
-        
-        # CHANGED: The "backend" part of the path is removed
         annotated_image_path = os.path.join("uploads", annotated_filename)
         cv2.imwrite(annotated_image_path, annotated_image)
         
