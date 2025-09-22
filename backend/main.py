@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 
-from . import database, models, security
+from backend import database, models, security, services
 from .services import analysis_service
 from .config import settings
 
