@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 import database, models, security, services
-from .config import settings
+from config import settings
 
 # --- App Initialization ---
 app = FastAPI(title="Bovilens API")
