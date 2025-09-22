@@ -1,0 +1,18 @@
+# backend/config.py
+# backend/config.py
+import os
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+# ... rest of the file ...
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    MONGO_URI: str
+    JWT_SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
+    model_config = SettingsConfigDict(env_file="backend/.env")
+
+settings = Settings()

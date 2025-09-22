@@ -1,0 +1,32 @@
+# backend/requirements.txt
+
+# FastAPI and Server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+motor # Async MongoDB driver
+pydantic[email]
+pydantic-settings # For advanced validation
+
+# Security
+passlib[bcrypt]
+python-jose[cryptography]
+slowapi
+
+# Configuration
+python-dotenv
+
+# --- Machine Learning ---
+# Install these separately if you have issues
+# deeplabcut
+# ultralytics # For YOLO
+
+# Image Processing
+opencv-python-headless
+Pillow
+# Machine Learning
+tensorflow
+opencv-python-headless
+Pillow
