@@ -1,6 +1,6 @@
 {
   "appId": "com.bovilens.app",
   "appName": "BOVILENS",
-  "webDir": "frontend",
+  "webDir": "www",
   "bundledWebRuntime": false
 }

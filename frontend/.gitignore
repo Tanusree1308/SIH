@@ -1,0 +1,19 @@
+# Python/Venv
+venv/
+__pycache__/
+*.pyc
+
+# Node.js/Capacitor
+node_modules/
+frontend/node_modules/
+frontend/www/
+frontend/android/app/build/
+frontend/android/app/release/
+.DS_Store
+
+# IDE files
+.idea/
+.vscode/
+
+# Other
+.env
