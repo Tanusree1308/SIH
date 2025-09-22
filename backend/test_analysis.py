@@ -1,6 +1,5 @@
 import cv2
-import services.analysis_service as analysis_service
-
+from services import analysis_service
 # --- IMPORTANT ---
 # 1. Place an image of a single cow or buffalo in your `backend/` folder.
 # 2. Change the file name below to match your test image.
