@@ -10,7 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
-import database, models, security, services
+import database, models, security,  services, config
 from config import settings
 
 # --- App Initialization ---

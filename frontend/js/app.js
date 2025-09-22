@@ -1,5 +1,5 @@
 // --- CONFIGURATION ---
-const API_BASE_URL = 'http://127.0.0.1:3001'; // IMPORTANT: Make sure this port matches your running server
+const API_BASE_URL = 'https://bovilens.onrender.com'; // IMPORTANT: Make sure this port matches your running server
 
 // --- TRANSLATIONS ---
 const translations = {
