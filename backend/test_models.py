@@ -3,14 +3,14 @@ import numpy as np
 import tensorflow as tf
 
 # --- CONFIGURATION ---
-# 1. Place your buffalo image in the `backend/` folder.
+# 1. Place your buffalo image in the backend/ folder.
 # 2. Change this filename to match your image.
 TEST_IMAGE_PATH = "backend/buffalo.jpg"
 
 # 3. These must match your analysis_service.py file.
 MODEL_PATH = "backend/models/object_detection.tflite"
 IMG_SIZE = (640, 640)
-CLASS_NAMES = ["cattle", "buffalo"] 
+CLASS_NAMES = ["cattle", "buffalo"]
 
 def main():
     print("--- Starting Model Diagnostic Test ---")
@@ -30,6 +30,7 @@ def main():
         print(f"❌ ERROR: Cannot find the test image at '{TEST_IMAGE_PATH}'.")
         return
 
+    h, w, _ = image.shape
     resized_image = cv2.resize(image, IMG_SIZE)
     input_tensor = np.expand_dims(resized_image, axis=0).astype(np.float32) / 255.0
 
@@ -42,34 +43,38 @@ def main():
 
     # 4. Analyze and print the results
     print("\n--- MODEL OUTPUT ---")
-    
-    detections = detector.get_tensor(output_details[0]['index'])[0]
+
+    raw_output = detector.get_tensor(output_details[0]['index'])[0]  # shape (6, 8400)
+    detections = np.transpose(raw_output)  # shape (8400, 6)
 
     found_anything = False
-    for i, detection in enumerate(detections[:5]):
-        
-        box_and_class_info = detection[:6]
-        if len(box_and_class_info) < 6:
-            continue
-            
-        _, _, _, _, class_id_float, score = box_and_class_info
-        class_id = int(class_id_float)
-        
-        if score > 0.01: # Show anything with more than 1% confidence
+    for i, det in enumerate(detections[:100]):  # check first 100 anchors only
+        x, y, box_w, box_h, confidence, class_prob = det
+        score = confidence * class_prob  # combine object confidence + class prob
+
+        if score > 0.3:  # threshold for printing
             found_anything = True
-            class_name = CLASS_NAMES[class_id] if class_id < len(CLASS_NAMES) else f"Unknown Class ID ({class_id})"
+            class_id = 0 if class_prob < 0.5 else 1   # crude classification
+            class_name = CLASS_NAMES[class_id]
+
+            # Convert YOLO-style (x,y,w,h) → pixel box
+            x1 = int((x - box_w / 2) * w)
+            y1 = int((y - box_h / 2) * h)
+            x2 = int((x + box_w / 2) * w)
+            y2 = int((y + box_h / 2) * h)
+
             print(f"\nDetection #{i+1}:")
             print(f"  - Confidence Score: {score:.2f}")
-            print(f"  - Detected Class: '{class_name}' (ID: {class_id})")
+            print(f"  - Detected Class: '{class_name}'")
+            print(f"  - Box: ({x1}, {y1}), ({x2}, {y2})")
 
     if not found_anything:
-        print("\nThe model did not detect any objects with a confidence score above 1%.")
-        
+        print("\nThe model did not detect any objects with confidence > 0.3.")
+
     print("\n--- DIAGNOSIS ---")
-    print("Check the 'Confidence Score' above. If it is below 0.50, the app will reject it.")
-    print("Also, check if the 'Detected Class' is correct. It must be 'cattle' or 'buffalo'.")
+    print("Check the 'Confidence Score' above. If it is below ~0.50, the app may reject it.")
+    print("Check if 'Detected Class' is correct. It must be 'cattle' or 'buffalo'.")
     print("-----------------")
 
-
-if __name__ == "__main__":
+if _name_ == "_main_":
     main()

@@ -2,5 +2,10 @@
   "appId": "com.bovilens.app",
   "appName": "BOVILENS",
   "webDir": "www",
-  "bundledWebRuntime": false
+  "bundledWebRuntime": false,
+  "assets": {
+    "icon": {
+      "source": "../resources/icon.png"
+    }
+  }
 }

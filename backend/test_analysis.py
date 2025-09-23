@@ -1,13 +1,14 @@
 import cv2
-from services import analysis_service
+from services.analysis_service import AnalysisService
+
 # --- IMPORTANT ---
-# 1. Place an image of a single cow or buffalo in your `backend/` folder.
+# 1. Place an image of a single cow or buffalo in your backend/ folder.
 # 2. Change the file name below to match your test image.
-TEST_IMAGE_PATH = "backend/test_cow.jpg" 
+TEST_IMAGE_PATH = "backend/test_cow.jpg"
 
 def main():
     print("--- Starting Analysis Test ---")
-    
+
     # 1. Check if the image exists
     image = cv2.imread(TEST_IMAGE_PATH)
     if image is None:
@@ -19,6 +20,8 @@ def main():
 
     # 2. Run the full analysis function
     try:
+        analysis_service = AnalysisService()  # ✅ Create instance
+
         print("\nRunning the analysis service...")
         result = analysis_service.run_full_analysis(TEST_IMAGE_PATH)
 
@@ -26,7 +29,6 @@ def main():
             print("\n- - - - - - - - - - - - - - - - - -")
             print("✅ SUCCESS: The service correctly identified that no valid animal was found.")
             print("- - - - - - - - - - - - - - - - - -")
-
         else:
             print("\n- - - - - - - - - - - - - - - - - -")
             print("✅ SUCCESS: Analysis completed without errors!")
@@ -44,9 +46,5 @@ def main():
         traceback.print_exc()
         print("---------------------")
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     main()
-
-
-
-    
