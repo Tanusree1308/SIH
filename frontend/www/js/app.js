@@ -16,29 +16,44 @@ const translations = {
     }
 };
 
-
 let currentLanguage = 'en';
 let cameraStream = null;
 const blindsOverlay = document.getElementById('blinds-transition-overlay');
 
-// --- FIXED FUNCTION ---
-async function checkAuthStatus() {
-    // This function runs on app load and was causing a crash.
-    // The fix is to check if the Capacitor native plugins are ready before trying to use them.
-    // If they aren't ready, we safely assume the user needs to log in.
-    if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.Preferences) {
-        console.warn('Capacitor Preferences plugin not available at launch. Assuming user is not logged in.');
-        // Proceed down the "not logged in" path.
-        setTimeout(() => { document.getElementById('splash-screen')?.classList.add('fade-out'); }, 2500);
-        setTimeout(() => { showScreen('language-screen'); }, 3000);
-        return; // Exit the function to prevent the crash.
+// --- NEW STORAGE HELPER FUNCTIONS ---
+// These functions use Capacitor Preferences on native devices 
+// and fall back to localStorage in web browsers.
+
+async function setAuthToken(token) {
+    if (window.Capacitor?.Plugins?.Preferences) {
+        await window.Capacitor.Plugins.Preferences.set({ key: 'accessToken', value: token });
+    } else {
+        localStorage.setItem('accessToken', token);
     }
+}
 
-    // If the check above passes, we can safely use the plugin.
-    const { Preferences } = window.Capacitor.Plugins;
-    const { value } = await Preferences.get({ key: 'accessToken' });
+async function getAuthToken() {
+    if (window.Capacitor?.Plugins?.Preferences) {
+        const { value } = await window.Capacitor.Plugins.Preferences.get({ key: 'accessToken' });
+        return value;
+    } else {
+        return localStorage.getItem('accessToken');
+    }
+}
 
-    if (value) {
+async function removeAuthToken() {
+    if (window.Capacitor?.Plugins?.Preferences) {
+        await window.Capacitor.Plugins.Preferences.remove({ key: 'accessToken' });
+    } else {
+        localStorage.removeItem('accessToken');
+    }
+}
+// --- END OF NEW HELPER FUNCTIONS ---
+
+async function checkAuthStatus() {
+    const token = await getAuthToken(); // Use helper
+
+    if (token) {
         console.log('User is already logged in.');
         fetchAnalysisHistory();
         showScreen('dashboard-screen');
@@ -49,8 +64,7 @@ async function checkAuthStatus() {
     }
 }
 
-
-// --- API FUNCTIONS ---
+// --- API FUNCTIONS (NOW UPDATED) ---
 async function registerUser(event) {
     event.preventDefault();
     const form = event.target;
@@ -89,7 +103,6 @@ async function registerUser(event) {
 
 async function loginUser(event) {
     event.preventDefault();
-    const { Preferences } = window.Capacitor.Plugins;
     const form = event.target;
     const formData = new FormData(form);
     const body = new URLSearchParams();
@@ -107,10 +120,7 @@ async function loginUser(event) {
         if (!response.ok) {
             alert(`Login failed: ${result.detail}`);
         } else {
-            await Preferences.set({
-                key: 'accessToken',
-                value: result.access_token
-            });
+            await setAuthToken(result.access_token); // Use helper
             fetchAnalysisHistory();
             showScreen('dashboard-screen');
             form.reset();
@@ -123,10 +133,9 @@ async function loginUser(event) {
 
 async function analyzeImage(event) {
     event.preventDefault();
-    const { Preferences } = window.Capacitor.Plugins;
     const fileInput = document.getElementById('file-input');
     const file = fileInput.files[0];
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = await getAuthToken(); // Use helper
 
     if (!file) {
         alert("Please select an image first.");
@@ -154,6 +163,7 @@ async function analyzeImage(event) {
 
         if (!response.ok) {
             alert(`Analysis failed: ${result.detail}`);
+            showScreen('dashboard-screen'); // Go back on fail
         } else {
             populateResults(result);
             showScreen('results-screen');
@@ -161,14 +171,14 @@ async function analyzeImage(event) {
     } catch (error) {
         console.error('Analysis error:', error);
         alert("An error occurred during analysis. Please ensure the backend is running.");
+        showScreen('dashboard-screen'); // Go back on fail
     }
 }
 
 async function captureAndAnalyzeImage(event) {
     event.preventDefault();
-    const { Preferences } = window.Capacitor.Plugins;
     const canvas = document.getElementById('photo-canvas');
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = await getAuthToken(); // Use helper
 
     if (!canvas) return;
     if (!token) {
@@ -194,6 +204,7 @@ async function captureAndAnalyzeImage(event) {
 
             if (!response.ok) {
                 alert(`Analysis failed: ${result.detail}`);
+                showScreen('dashboard-screen'); // Go back on fail
             } else {
                 populateResults(result);
                 showScreen('results-screen');
@@ -201,13 +212,13 @@ async function captureAndAnalyzeImage(event) {
         } catch (error) {
             console.error('Analysis error from capture:', error);
             alert("An error occurred during analysis. Please ensure the backend is running.");
+            showScreen('dashboard-screen'); // Go back on fail
         }
     }, 'image/jpeg');
 }
 
 async function fetchAndDisplayUserData() {
-    const { Preferences } = window.Capacitor.Plugins;
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = await getAuthToken(); // Use helper
     if (!token) {
         showScreen('secure-login-screen');
         return;
@@ -229,8 +240,7 @@ async function fetchAndDisplayUserData() {
 
 async function saveProfileChanges(event) {
     event.preventDefault();
-    const { Preferences } = window.Capacitor.Plugins;
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = await getAuthToken(); // Use helper
     if (!token) return;
 
     const nameInput = document.getElementById('edit-info-name');
@@ -258,8 +268,7 @@ async function saveProfileChanges(event) {
 
 async function changePassword(event) {
     event.preventDefault();
-    const { Preferences } = window.Capacitor.Plugins;
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = await getAuthToken(); // Use helper
     if (!token) return;
 
     const form = document.getElementById('change-password-form');
@@ -299,8 +308,7 @@ async function changePassword(event) {
 }
 
 async function fetchAnalysisHistory() {
-    const { Preferences } = window.Capacitor.Plugins;
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = await getAuthToken(); // Use helper
     if (!token) return;
 
     try {
@@ -320,7 +328,7 @@ async function fetchAnalysisHistory() {
     }
 }
 
-// --- RESTORED CORE FUNCTIONS ---
+// --- CORE UI FUNCTIONS ---
 function setLanguage(lang) {
     currentLanguage = lang;
     document.querySelectorAll('[data-key]').forEach(element => {
@@ -596,8 +604,7 @@ document.getElementById('menu-security-btn')?.addEventListener('click', (e) => {
 document.getElementById('menu-help-btn')?.addEventListener('click', (e) => { e.preventDefault(); closeSidebar(); showScreen('help-screen'); });
 document.getElementById('menu-signout-btn')?.addEventListener('click', async (e) => {
     e.preventDefault();
-    const { Preferences } = window.Capacitor.Plugins;
-    await Preferences.remove({ key: 'accessToken' });
+    await removeAuthToken(); // Use helper
     closeSidebar();
     showScreen('secure-login-screen');
 });
