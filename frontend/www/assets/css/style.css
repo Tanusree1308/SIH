@@ -1,0 +1,385 @@
+/* --- Base App Styles --- */
+body {
+    background: linear-gradient(to top, #f3f4f6, #e0f2fe);
+}
+.form-input {
+    width: 100%;
+    padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease-in-out;
+}
+.form-input:focus {
+    outline: none;
+    border-color: #1a4578;
+    box-shadow: 0 0 0 2px rgba(26, 69, 120, 0.3);
+}
+.dashboard-card-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.5rem;
+    background-color: white;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    transition: all 0.2s ease-in-out;
+}
+.dashboard-card-main:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    color: #334155;
+    transition: background-color 0.2s ease-in-out;
+}
+.sidebar-link:hover {
+    background-color: #f1f5f9;
+}
+.settings-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 1rem;
+    background-color: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    transition: all 0.2s ease-in-out;
+}
+.settings-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+.gauge-container {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: conic-gradient(#1a4578 0deg, #e5e7eb 0deg);
+    transition: background 1s ease-in-out;
+}
+.gauge-container::before {
+    content: '';
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    background: white;
+    border-radius: 50%;
+}
+.gauge-value {
+    position: relative;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+/* --- Global Animations --- */
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.fade-out { animation: fade-out 0.5s ease-out forwards; }
+.fade-in { animation: fade-in 0.5s ease-in forwards; }
+
+.blinds-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 999;
+    overflow: hidden;
+    background: linear-gradient(315deg, #081524 0%, #1a4578 50%, #112d4e 100%);
+    pointer-events: none;
+    display: none;
+}
+.blinds-overlay .blind {
+    position: absolute;
+    width: 2%;
+    height: 0;
+    background: #081524; 
+    top: 0;
+}
+.blinds-overlay.animate .blind {
+    height: 100%;
+}
+
+/* --- Secure Login Screen Styles --- */
+#secure-login-screen {
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(0deg, #081524, #112d4e);
+    font-family: 'Source Sans Pro', sans-serif;
+    font-size: 1.6rem;
+}
+#secure-login-screen * {
+    box-sizing: border-box;
+}
+#secure-login-screen h4 {
+    font-family: 'Bitter', serif;
+    margin-bottom: 0.8em;
+    font-weight: 800;
+    font-size: 2.4rem;
+    text-align: center;
+}
+#secure-login-screen .wrap {
+    position: absolute;
+    z-index: 2;
+    width: 90%;
+    max-width: 420px;
+    top: 50%;
+    left: 50%;
+    transform: translate3d(-50%, -50%, 0);
+    background: #f9f9f9;
+    border-radius: 1.5rem;
+    padding: 3rem;
+    box-shadow: 1rem 2rem 4rem rgba(0,0,0, 0.2);
+    color: #081524;
+}
+#secure-login-screen label {
+    display: block;
+    margin: 1.5rem 0 0.5rem;
+    font-size: 1.6rem;
+    font-weight: 300;
+}
+#secure-login-screen input {
+    border-radius: 0.5rem;
+    padding: 1rem;
+    border: none;
+    outline: none;
+    font-family: 'Source Sans Pro', sans-serif;
+    width: 100%;
+}
+#secure-login-screen input[type="text"], 
+#secure-login-screen input[type="password"] {
+    color: #081524;
+    margin: 0.5rem 0;
+    background: hsl(210, 100%, 98%);
+    font-size: 1.6rem;
+    box-shadow: inset -0.15rem -0.25rem 0.5rem rgba(255,255,255, 0.4), inset 0.05rem 0.1rem 0.3rem rgba(0,0,0, 0.4);
+}
+#secure-login-screen input[type="submit"] {
+    padding: 15px 100px 30px 30px;
+    background: #1a4578;
+    text-align:center;
+    cursor: pointer;
+    border-radius: 0.5rem;
+}
+#secure-login-screen #submit {
+    margin-top: 2rem;
+    position: relative;
+    display: inline-block;
+}
+#secure-login-screen #submit label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 800;
+    pointer-events: none;
+}
+#secure-login-screen .switch-form-link {
+    margin-top: 2rem;
+    text-align: center;
+    font-size: 1.4rem;
+}
+#secure-login-screen .switch-form-link a {
+    color: #1a4578;
+    font-weight: bold;
+    text-decoration: none;
+}
+#secure-login-screen .switch-form-link a:hover {
+    text-decoration: underline;
+}
+
+/* --- Shared Background for Blue Screens --- */
+#dashboard-screen, 
+#register-screen, 
+#edit-info-screen, 
+#security-screen, 
+#help-screen, 
+#additional-screen,
+#results-screen { /* <-- Add this line */
+    background: linear-gradient(0deg, #081524, #112d4e);
+    min-height: 100vh;
+}#edit-info-screen h1, 
+#security-screen h1, 
+#help-screen h1, 
+#additional-screen h1 {
+    color: white;
+}
+
+/* --- Animations --- */
+@keyframes slideUp { from { transform: translate3d(-50%, 100%, 0); opacity: 0; } to { transform: translate3d(-50%, -50%, 0); opacity: 1; } }
+#secure-login-screen .wrap {
+    opacity: 0;
+}
+#secure-login-screen.visible .wrap {
+    animation: slideUp 0.7s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+}
+
+@keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+#register-screen .wrap-register {
+    width: 90%;
+    max-width: 24rem;
+    opacity: 0;
+}
+#register-screen.visible .wrap-register {
+    animation: slideDown 0.7s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+}
+
+@layer utilities {
+    @keyframes wiper {
+        from {
+            clip-path: inset(0 100% 0 0);
+        }
+        to {
+            clip-path: inset(0 0 0 0);
+        }
+    }
+    .animate-wiper-1 {
+        animation: wiper 0.6s cubic-bezier(0.645, 0.045, 0.355, 1) forwards;
+        animation-delay: 0.2s;
+    }
+    .animate-wiper-2 {
+        animation: wiper 0.6s cubic-bezier(0.645, 0.045, 0.355, 1) forwards;
+        animation-delay: 0.4s;
+    }
+}
+/* --- Trait Scores Details --- */
+.trait-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid #e5e7eb; /* light gray border */
+}
+
+.trait-item:last-child {
+    border-bottom: none;
+}
+/* --- Analyzing Screen Loader Animation --- */
+.loader-container {
+    position: relative;
+    height: 120px;
+}
+.loader-center {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 140px;
+    height: 140px;
+    border-radius: 100%;
+    background-color: #112d4e; /* The new blue background */
+    border: 9px solid #1a4578; /* A slightly lighter blue for the border */
+    overflow: hidden;
+    animation: bounce-up 0.7s ease infinite alternate;
+}.loader-container::before {
+    content: "";
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 20px;
+    border-radius: 100%;
+    background-color: rgba(0, 0, 0, 0.1);
+    filter: blur(5px);
+    animation: shadow-squish 0.7s ease infinite alternate;
+}
+.loader-wrap {
+    display: flex;
+    flex-direction: row;
+    width: 400%; /* Make it wide enough for four icons */
+    animation: slide-left 2s linear infinite; /* A single, longer animation */
+}
+.loader-icon {
+    width: 55px;
+    height: auto;
+    margin: 0 16px; /* Adjusted margin for better spacing */
+}
+
+/* Keyframe Animations */
+@keyframes slide-left {
+    from { transform: translateX(0%); }
+    to { transform: translateX(-50%); } /* Loop seamlessly */
+}
+@keyframes bounce-up {
+    from { transform: translateY(15px); }
+    to { transform: translateY(0); }
+}
+@keyframes shadow-squish {
+    from { transform: translateX(-50%) scale(1.15, 1); }
+    to { transform: translateX(-50%) scale(1, 1); }
+}
+/* --- Responsive Fix for Menu Component Pages --- */
+
+@media (max-width: 640px) {
+    /* Reduces padding on the main container for small screens */
+    #edit-info-screen .p-6,
+    #security-screen .p-6,
+    #help-screen .p-6,
+    #additional-screen .p-6 {
+        padding: 1rem;
+    }
+    
+    /* Makes the white card inside slightly smaller */
+    #edit-info-screen .p-8,
+    #security-screen .p-8 {
+        padding: 1.5rem;
+    }
+    
+    /* Reduces the header text size on mobile */
+    #edit-info-screen h1,
+    #security-screen h1,
+    #help-screen h1,
+    #additional-screen h1 {
+        font-size: 1.875rem; /* Equivalent to text-3xl */
+    }
+}
+/* --- Centering for Register Screen --- */
+
+/*#register-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    padding: 2rem;
+    box-sizing: border-box
+}*/
+
+#register-screen .wrap-register {
+    width: 100%;
+    max-width: 26rem; /* You can adjust this max-width if you like */
+    /* The slideDown animation you already have will work perfectly with this */
+}
+/* --- Fix for Register Screen Text Color --- */
+
+#register-screen .text-slate-800,
+#register-screen .text-slate-600 {
+    color: white;
+}
+
+/* --- Fix for Login Screen "Sign Up" Link Color --- */
+
+#secure-login-screen .switch-form-link a {
+    color: #3b82f6; /* A nice blue color */
+}
+/* --- Color for "Login here" Link on Register Screen --- */
+
+#register-screen #show-login-link {
+    color: #3b82f6; /* A standard, visible blue */
+}
