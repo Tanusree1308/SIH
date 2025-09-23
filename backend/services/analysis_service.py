@@ -1,164 +1,124 @@
-import os
-import cv2
-import numpy as np
 import tensorflow as tf
+import numpy as np
+import cv2
+import os
 
-# --- Constants ---
-KEYPOINT_NAMES = [
-    "wither", "sole", "bwdt2", "back", "shoulder",
-    "hip1", "ground", "chest", "bwdt1"
-]
-CLASS_NAMES = ["cattle", "buffalo"]
 
-# --- Main Service Class ---
 class AnalysisService:
-
     def _init_(self):
-        """Initialize service and load ML models once."""
-        object_detection_model_path = "models/object_detection.tflite"
-        pose_estimation_model_path = "models/pose_estimation.tflite"
+        """
+        Initialize object detection and pose estimation TFLite models.
+        """
+        # --- Load Object Detection Model ---
+        object_model_path = "backend/models/object_detection.tflite"
+        if not os.path.exists(object_model_path):
+            raise FileNotFoundError(f"❌ Object detection model not found at {object_model_path}")
 
-        try:
-            self.object_detector = tf.lite.Interpreter(model_path=object_detection_model_path)
-            self.object_detector.allocate_tensors()
-            self.pose_estimator = tf.lite.Interpreter(model_path=pose_estimation_model_path)
-            self.pose_estimator.allocate_tensors()
-            print("✅ TFLite models loaded successfully.")
-        except Exception as e:
-            print(f"❌ FATAL: Error loading TFLite models: {e}")
-            self.object_detector = None
-            self.pose_estimator = None
+        self.object_detector = tf.lite.Interpreter(model_path=object_model_path)
+        self.object_detector.allocate_tensors()
 
-    def _preprocess_image(self, image, size):
-        """Resize and normalize image for models."""
-        resized_image = cv2.resize(image, size)
-        input_tensor = np.expand_dims(resized_image, axis=0).astype(np.float32)
-        return input_tensor / 255.0
+        self.obj_input_details = self.object_detector.get_input_details()
+        self.obj_output_details = self.object_detector.get_output_details()
 
-    def _detect_animal_with_tflite(self, image_path: str):
-        """Run object detection and return best detection."""
-        if not self.object_detector:
-            raise Exception("Object detection model is not loaded.")
-        
-        image = cv2.imread(image_path)
-        original_h, original_w, _ = image.shape
-        input_tensor = self._preprocess_image(image, (640, 640))
-        
-        input_details = self.object_detector.get_input_details()[0]
-        output_details = self.object_detector.get_output_details()
-        self.object_detector.set_tensor(input_details['index'], input_tensor)
-        self.object_detector.invoke()
-        
-        detections = self.object_detector.get_tensor(output_details[0]['index'])[0]
+        # --- Load Pose Estimation Model ---
+        pose_model_path = "backend/models/pose_estimation.tflite"
+        if not os.path.exists(pose_model_path):
+            raise FileNotFoundError(f"❌ Pose estimation model not found at {pose_model_path}")
 
-        best_detection = None
-        best_score = 0.0
+        self.pose_estimator = tf.lite.Interpreter(model_path=pose_model_path)
+        self.pose_estimator.allocate_tensors()
 
-        # Iterate over detections (shape: [N, 6] → [ymin, xmin, ymax, xmax, class, score])
-        for det in detections.T:  
-            ymin, xmin, ymax, xmax, class_id_float, score = det[:6]
-            class_id = int(class_id_float)
-            if score > best_score and score > 0.5 and class_id < len(CLASS_NAMES):
-                class_name = CLASS_NAMES[class_id]
-                if class_name in ["cattle", "buffalo"]:
-                    best_score = score
-                    x1, y1 = int(xmin * original_w), int(ymin * original_h)
-                    x2, y2 = int(xmax * original_w), int(ymax * original_h)
-                    best_detection = {
-                        "box": (x1, y1, x2, y2),
-                        "class_name": class_name,
-                        "score": float(score)
-                    }
+        self.pose_input_details = self.pose_estimator.get_input_details()
+        self.pose_output_details = self.pose_estimator.get_output_details()
 
-        return best_detection
+        print("✅ Models loaded successfully!")
 
-    def _get_keypoints_with_tflite(self, cropped_image: np.ndarray) -> dict:
-        """Run pose estimation and extract keypoints."""
-        if not self.pose_estimator:
-            raise Exception("Pose estimation model is not loaded.")
-        
-        h, w, _ = cropped_image.shape
-        input_tensor = self._preprocess_image(cropped_image, (640, 640))
-        input_details = self.pose_estimator.get_input_details()[0]
-        output_details = self.pose_estimator.get_output_details()[0]
-        self.pose_estimator.set_tensor(input_details['index'], input_tensor)
-        self.pose_estimator.invoke()
-        
-        raw_output = self.pose_estimator.get_tensor(output_details['index'])
-
-        # Handle different shapes safely
-        if raw_output.ndim == 3:   # e.g. (1, N, 3)
-            keypoints_output = raw_output[0]
-        elif raw_output.ndim == 2: # e.g. (N, 3)
-            keypoints_output = raw_output
-        else:
-            raise ValueError(f"Unexpected pose model output shape: {raw_output.shape}")
-
-        keypoints_dict = {}
-        for i, name in enumerate(KEYPOINT_NAMES):
-            if i < len(keypoints_output):
-                y, x, conf = keypoints_output[i]
-                if conf > 0.1:
-                    abs_x, abs_y = int(x * w), int(y * h)
-                    keypoints_dict[name] = {
-                        'coords': (abs_x, abs_y),
-                        'confidence': float(conf)
-                    }
-        return keypoints_dict
-
-    def _calculate_atp_scores(self, keypoints: dict) -> dict:
-        """Compute ATP scores from keypoints."""
-        trait_scores_list = []
-        for name in KEYPOINT_NAMES:
-            keypoint_data = keypoints.get(name)
-            score = keypoint_data['confidence'] if keypoint_data else 0.0
-            trait_scores_list.append({
-                "trait_name": name.capitalize(),
-                "score": round(score, 2)
-            })
-
-        valid_scores = [item['score'] for item in trait_scores_list if item['score'] > 0]
-        overall_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
-        
-        return {
-            "overall_score": float(round(overall_score, 2)),
-            "trait_scores": trait_scores_list
-        }
-
-    def run_full_analysis(self, image_path: str) -> dict:
-        """Main pipeline: detect → crop → pose → score."""
+    def preprocess_image(self, image_path, input_shape):
+        """
+        Loads and preprocesses an image for the model.
+        """
         image = cv2.imread(image_path)
         if image is None:
-            raise ValueError(f"Could not read image from path: {image_path}")
-        
-        detection_result = self._detect_animal_with_tflite(image_path)
-        if detection_result is None:
-            return {
-                "error": "No cattle or buffalo detected with enough confidence."
-            }
-        
-        x1, y1, x2, y2 = detection_result["box"]
-        class_name = detection_result["class_name"]
-        score = detection_result["score"]
+            raise ValueError(f"❌ Could not read image: {image_path}")
 
-        cropped_image = image[y1:y2, x1:x2]
-        if cropped_image.size == 0:
-            raise ValueError("Failed to crop image.")
-        
-        keypoints = self._get_keypoints_with_tflite(cropped_image)
-        scores = self._calculate_atp_scores(keypoints)
+        height, width = input_shape[1], input_shape[2]
+        image_resized = cv2.resize(image, (width, height))
+        input_data = np.expand_dims(image_resized, axis=0).astype(np.float32)
+        return input_data
 
-        # Annotated image
-        annotated_image = image.copy()
-        cv2.rectangle(annotated_image, (x1, y1), (x2, y2), (0, 255, 0), 3)
-        base, _ = os.path.splitext(os.path.basename(image_path))
-        annotated_filename = f"{base}-annotated.jpg"
-        annotated_image_path = os.path.join("uploads", annotated_filename)
-        cv2.imwrite(annotated_image_path, annotated_image)
-        
+    def run_object_detection(self, image_path):
+        """
+        Runs object detection on the given image.
+        """
+        input_data = self.preprocess_image(image_path, self.obj_input_details[0]['shape'])
+
+        self.object_detector.set_tensor(self.obj_input_details[0]['index'], input_data)
+        self.object_detector.invoke()
+
+        boxes = self.object_detector.get_tensor(self.obj_output_details[0]['index'])
+        classes = self.object_detector.get_tensor(self.obj_output_details[1]['index'])
+        scores = self.object_detector.get_tensor(self.obj_output_details[2]['index'])
+
         return {
-            "scores": scores,
-            "annotated_image_path": annotated_image_path,
-            "class_name": class_name,
-            "detection_confidence": score
+            "boxes": boxes.tolist(),
+            "classes": classes.tolist(),
+            "scores": scores.tolist()
         }
+
+    def run_pose_estimation(self, image_path):
+        """
+        Runs pose estimation on the given image.
+        """
+        input_data = self.preprocess_image(image_path, self.pose_input_details[0]['shape'])
+
+        self.pose_estimator.set_tensor(self.pose_input_details[0]['index'], input_data)
+        self.pose_estimator.invoke()
+
+        keypoints = self.pose_estimator.get_tensor(self.pose_output_details[0]['index'])
+        return {"keypoints": keypoints.tolist()}
+
+    def calculate_atp_score(self, detection_results, pose_results):
+        """
+        Dummy ATP scoring function.
+        Replace with your own scoring logic later.
+        """
+        detection_confidence = np.mean(detection_results["scores"]) if detection_results["scores"] else 0
+        pose_quality = np.mean(pose_results["keypoints"]) if pose_results["keypoints"] else 0
+
+        # Normalize values between 0–100
+        detection_score = float(min(100, detection_confidence * 100))
+        pose_score = float(min(100, pose_quality * 10))  # scaled differently
+
+        overall_score = round((detection_score * 0.6 + pose_score * 0.4), 2)
+
+        return {
+            "overall_score": overall_score,
+            "trait_scores": {
+                "detection_score": detection_score,
+                "pose_score": pose_score
+            }
+        }
+
+    def run_full_analysis(self, image_path):
+        """
+        Runs both object detection and pose estimation on the image.
+        Returns ATP scoring results.
+        """
+        try:
+            detection_results = self.run_object_detection(image_path)
+            pose_results = self.run_pose_estimation(image_path)
+            scores = self.calculate_atp_score(detection_results, pose_results)
+
+            return {
+                "status": "success",
+                "class_name": str(detection_results["classes"][0]) if detection_results["classes"] else "unknown",
+                "scores": scores,
+                "object_detection": detection_results,
+                "pose_estimation": pose_results,
+                "annotated_image_path": image_path  # Later you can save annotated image
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
