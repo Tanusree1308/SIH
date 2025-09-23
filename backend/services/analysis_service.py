@@ -21,12 +21,19 @@ KEYPOINT_DICT = {
 
 class AnalysisService:
     def __init__(self):
-        """
-        Initialize object detection and pose estimation TFLite models.
-        """
-        # --- Load Object Detection Model ---
-        object_model_path = "backend/models/object_detection.tflite"
+        # --- START OF FIX ---
+        # Build a reliable, absolute path to the models directory
+        # This works even when deployed on a server like Render
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.path.join(current_dir, '..') # Go up from 'services' to 'backend'
+        
+        object_model_path = os.path.join(base_dir, 'models', 'object_detection.tflite')
+        pose_model_path = os.path.join(base_dir, 'models', 'pose_estimation.tflite')
+        # --- END OF FIX ---
+
+        # The rest of your code remains the same
         if not os.path.exists(object_model_path):
+            # This error message will now print the full, absolute path for better debugging
             raise FileNotFoundError(f"❌ Object detection model not found at {object_model_path}")
 
         self.object_detector = tf.lite.Interpreter(model_path=object_model_path)
@@ -35,8 +42,6 @@ class AnalysisService:
         self.obj_input_details = self.object_detector.get_input_details()
         self.obj_output_details = self.object_detector.get_output_details()
 
-        # --- Load Pose Estimation Model ---
-        pose_model_path = "backend/models/pose_estimation.tflite"
         if not os.path.exists(pose_model_path):
             raise FileNotFoundError(f"❌ Pose estimation model not found at {pose_model_path}")
 
@@ -47,6 +52,7 @@ class AnalysisService:
         self.pose_output_details = self.pose_estimator.get_output_details()
 
         print("✅ Models loaded successfully!")
+
 
     def preprocess_image(self, image_path, input_shape):
         """
