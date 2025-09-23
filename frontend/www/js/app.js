@@ -1,5 +1,4 @@
-// NEW: Import the official Capacitor Preferences plugin
-import { Preferences } from '@capacitor/preferences';
+
 
 // --- CONFIGURATION ---
 const API_BASE_URL = 'https://bovilens.onrender.com';
