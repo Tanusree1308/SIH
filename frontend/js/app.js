@@ -21,31 +21,46 @@ let currentLanguage = 'en';
 let cameraStream = null;
 const blindsOverlay = document.getElementById('blinds-transition-overlay');
 
-// --- THIS FUNCTION IS NOW FIXED ---
+// --- THIS FUNCTION IS NOW FIXED TO PREVENT THE RACE CONDITION ---
 async function checkAuthStatus() {
-    // This function now waits until Capacitor is loaded before trying to use its plugins.
-    if (!window.Capacitor || !window.Capacitor.Plugins) {
-        // If Capacitor isn't ready, we can't check for a saved token.
-        // So we must show the normal login flow.
-        console.log('Capacitor not ready, proceeding to login flow.');
-        setTimeout(() => { document.getElementById('splash-screen')?.classList.add('fade-out'); }, 2500);
-        setTimeout(() => { showScreen('language-screen'); }, 3000);
-        return; // Stop the function here.
-    }
+    const maxWaitTime = 3000; // Wait a maximum of 3 seconds
+    const intervalTime = 100; // Check every 100ms
+    let elapsedTime = 0;
 
-    // If we get here, Capacitor is ready to be used.
-    const { Preferences } = window.Capacitor.Plugins;
-    const { value } = await Preferences.get({ key: 'accessToken' });
+    const intervalId = setInterval(async () => {
+        // Check if the Capacitor libraries are loaded and ready
+        if (window.Capacitor && window.Capacitor.Plugins) {
+            clearInterval(intervalId); // Stop checking
+            runAuthLogic(); // Run the real logic
+            return;
+        }
+        
+        elapsedTime += intervalTime;
+        if (elapsedTime >= maxWaitTime) {
+            // We've waited long enough. Assume Capacitor won't load (e.g., non-native browser)
+            clearInterval(intervalId); // Stop checking
+            console.log('Capacitor timed out or not available. Proceeding to login flow.');
+            proceedToLoginFlow();
+        }
+    }, intervalTime);
 
-    if (value) {
-        console.log('User is already logged in.');
-        fetchAnalysisHistory();
-        showScreen('dashboard-screen');
-    } else {
-        console.log('User needs to log in.');
-        setTimeout(() => { document.getElementById('splash-screen')?.classList.add('fade-out'); }, 2500);
-        setTimeout(() => { showScreen('language-screen'); }, 3000);
-    }
+    const runAuthLogic = async () => {
+        const { Preferences } = window.Capacitor.Plugins;
+        const { value } = await Preferences.get({ key: 'accessToken' });
+        if (value) {
+            console.log('User is already logged in.');
+            fetchAnalysisHistory();
+            showScreen('dashboard-screen');
+        } else {
+            console.log('User needs to log in.');
+            proceedToLoginFlow();
+        }
+    };
+
+    const proceedToLoginFlow = () => {
+        setTimeout(() => { document.getElementById('splash-screen')?.classList.add('fade-out'); }, 250);
+        setTimeout(() => { showScreen('language-screen'); }, 750);
+    };
 }
 
 
@@ -566,5 +581,65 @@ document.getElementById('retake-btn')?.addEventListener('click', (e) => {
     startCamera();
 });
 
-document.getElementById('submit-capture-btn')?.addEventListener('click', captureAndAnalyze);
+document.getElementById('submit-capture-btn')?.addEventListener('click', captureAndAnalyzeImage);
+
+// Back Buttons
+document.getElementById('back-to-dashboard-btn')?.addEventListener('click', (e) => { e.preventDefault(); showScreen('dashboard-screen'); });
+document.getElementById('back-to-dashboard-from-camera-btn')?.addEventListener('click', (e) => { e.preventDefault(); stopCamera(); showScreen('dashboard-screen'); });
+document.getElementById('back-to-dashboard-from-results-btn')?.addEventListener('click', (e) => { e.preventDefault(); showScreen('dashboard-screen'); });
+document.getElementById('back-to-dashboard-from-settings-btn')?.addEventListener('click', (e) => { e.preventDefault(); showScreen('dashboard-screen'); });
+
+document.getElementById('view-details-btn')?.addEventListener('click', (e) => {
+    const detailsContainer = document.getElementById('trait-details');
+    if (detailsContainer) {
+        detailsContainer.classList.toggle('hidden');
+    }
+});
+
+document.getElementById('open-sidebar-btn')?.addEventListener('click', openSidebar);
+document.getElementById('close-sidebar-btn')?.addEventListener('click', closeSidebar);
+document.getElementById('sidebar-backdrop')?.addEventListener('click', closeSidebar);
+document.getElementById('menu-dashboard-btn')?.addEventListener('click', (e) => { e.preventDefault(); closeSidebar(); showScreen('dashboard-screen'); });
+document.getElementById('menu-profile-btn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeSidebar();
+    fetchAndDisplayUserData();
+    showScreen('edit-info-screen');
+});
+document.getElementById('menu-security-btn')?.addEventListener('click', (e) => { e.preventDefault(); closeSidebar(); showScreen('security-screen'); });
+document.getElementById('menu-help-btn')?.addEventListener('click', (e) => { e.preventDefault(); closeSidebar(); showScreen('help-screen'); });
+document.getElementById('menu-signout-btn')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const { Preferences } = window.Capacitor.Plugins;
+    await Preferences.remove({ key: 'accessToken' });
+    closeSidebar();
+    showScreen('secure-login-screen');
+});
+
+document.getElementById('go-to-edit-info-btn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    fetchAndDisplayUserData();
+    showScreen('edit-info-screen');
+});
+document.getElementById('go-to-security-btn')?.addEventListener('click', (e) => { e.preventDefault(); showScreen('security-screen'); });
+document.getElementById('go-to-help-btn')?.addEventListener('click', (e) => { e.preventDefault(); showScreen('help-screen'); });
+document.getElementById('go-to-additional-btn')?.addEventListener('click', (e) => { e.preventDefault(); showScreen('additional-screen'); });
+document.getElementById('go-to-faq-btn')?.addEventListener('click', (e) => { e.preventDefault(); showScreen('faq-screen'); });
+
+document.querySelectorAll('.back-to-settings-btn').forEach(button => {
+    button.addEventListener('click', (e) => {
+        e.preventDefault();
+        showScreen('settings-screen');
+    });
+});
+
+document.querySelectorAll('.back-to-help-btn').forEach(button => {
+    button.addEventListener('click', (e) => {
+        e.preventDefault();
+        showScreen('help-screen');
+    });
+});
+
+document.getElementById('save-changes-form')?.addEventListener('submit', saveProfileChanges);
+document.getElementById('change-password-form')?.addEventListener('submit', changePassword);
 
