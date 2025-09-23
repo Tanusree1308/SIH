@@ -24,25 +24,22 @@ const blindsOverlay = document.getElementById('blinds-transition-overlay');
 
 // --- NEW: This function checks if the user is already logged in ---
 async function checkAuthStatus() {
-    // Try to get the token from the device's persistent storage
-    const { value } = await Preferences.get({ key: 'accessToken' });
+    // Get the token from localStorage
+    const token = localStorage.getItem('accessToken');
 
-    if (value) {
-        // Token exists, user is logged in!
+    if (token) {
         console.log('User is already logged in.');
-        fetchAnalysisHistory(); // Load their data
-        showScreen('dashboard-screen'); // Go directly to the dashboard
+        fetchAnalysisHistory(); 
+        showScreen('dashboard-screen');
     } else {
-        // No token, user needs to log in. Start the normal flow.
         console.log('User needs to log in.');
         setTimeout(() => { document.getElementById('splash-screen')?.classList.add('fade-out'); }, 2500);
         setTimeout(() => { showScreen('language-screen'); }, 3000);
     }
 }
 
-
 // --- API FUNCTIONS ---
-async function registerUser(event) { /* ... no changes needed in this function ... */ }
+async function registerUser(event) { /* keep same */ }
 
 async function loginUser(event) {
     event.preventDefault();
@@ -53,7 +50,7 @@ async function loginUser(event) {
     body.append('password', formData.get('password'));
 
     try {
-        const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        const response = await fetch(${API_BASE_URL}/auth/login, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: body,
@@ -61,13 +58,10 @@ async function loginUser(event) {
 
         const result = await response.json();
         if (!response.ok) {
-            alert(`Login failed: ${result.detail}`);
+            alert(Login failed: ${result.detail});
         } else {
-            // MODIFIED: Use Capacitor Preferences instead of localStorage
-            await Preferences.set({
-                key: 'accessToken',
-                value: result.access_token
-            });
+            // Save token in localStorage
+            localStorage.setItem('accessToken', result.access_token);
             fetchAnalysisHistory();
             showScreen('dashboard-screen');
             form.reset();
@@ -82,8 +76,7 @@ async function analyzeImage(event) {
     event.preventDefault();
     const fileInput = document.getElementById('file-input');
     const file = fileInput.files[0];
-    // MODIFIED: Use Capacitor Preferences to get the token
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = localStorage.getItem('accessToken');
 
     if (!file) {
         alert("Please select an image first.");
@@ -101,16 +94,16 @@ async function analyzeImage(event) {
     formData.append('file', file);
 
     try {
-        const response = await fetch(`${API_BASE_URL}/analysis/`, {
+        const response = await fetch(${API_BASE_URL}/analysis/, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
+            headers: { 'Authorization': Bearer ${token} },
             body: formData,
         });
 
         const result = await response.json();
 
         if (!response.ok) {
-            alert(`Analysis failed: ${result.detail}`);
+            alert(Analysis failed: ${result.detail});
         } else {
             populateResults(result);
             showScreen('results-screen');
@@ -124,9 +117,7 @@ async function analyzeImage(event) {
 async function captureAndAnalyzeImage(event) {
     event.preventDefault();
     const canvas = document.getElementById('photo-canvas');
-    // MODIFIED: Use Capacitor Preferences to get the token
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
-
+    const token = localStorage.getItem('accessToken');
 
     if (!canvas) return;
     if (!token) {
@@ -142,16 +133,16 @@ async function captureAndAnalyzeImage(event) {
         formData.append('file', blob, 'capture.jpg');
 
         try {
-            const response = await fetch(`${API_BASE_URL}/analysis/`, {
+            const response = await fetch(${API_BASE_URL}/analysis/, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
+                headers: { 'Authorization': Bearer ${token} },
                 body: formData,
             });
 
             const result = await response.json();
 
             if (!response.ok) {
-                alert(`Analysis failed: ${result.detail}`);
+                alert(Analysis failed: ${result.detail});
             } else {
                 populateResults(result);
                 showScreen('results-screen');
@@ -164,20 +155,17 @@ async function captureAndAnalyzeImage(event) {
 }
 
 async function fetchAndDisplayUserData() {
-    // MODIFIED: Use Capacitor Preferences to get the token
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = localStorage.getItem('accessToken');
     if (!token) {
         showScreen('secure-login-screen');
         return;
     }
     try {
-        const response = await fetch(`${API_BASE_URL}/users/me`, {
+        const response = await fetch(${API_BASE_URL}/users/me, {
             method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': Bearer ${token} }
         });
-        if (!response.ok) {
-            throw new Error('Failed to fetch user data');
-        }
+        if (!response.ok) throw new Error('Failed to fetch user data');
         const userData = await response.json();
         populateProfileForm(userData);
     } catch (error) {
@@ -187,25 +175,24 @@ async function fetchAndDisplayUserData() {
 
 async function saveProfileChanges(event) {
     event.preventDefault();
-    // MODIFIED: Use Capacitor Preferences to get the token
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = localStorage.getItem('accessToken');
     if (!token) return;
 
     const nameInput = document.getElementById('edit-info-name');
     const updatedData = { full_name: nameInput.value };
 
     try {
-        const response = await fetch(`${API_BASE_URL}/users/me`, {
+        const response = await fetch(${API_BASE_URL}/users/me, {
             method: 'PUT',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': Bearer ${token},
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(updatedData)
         });
         if (!response.ok) {
             const errorResult = await response.json();
-            alert(`Failed to save changes: ${errorResult.detail}`);
+            alert(Failed to save changes: ${errorResult.detail});
         } else {
             alert("Profile updated successfully!");
         }
@@ -216,22 +203,19 @@ async function saveProfileChanges(event) {
 
 async function changePassword(event) {
     event.preventDefault();
-    // MODIFIED: Use Capacitor Preferences to get the token
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = localStorage.getItem('accessToken');
     if (!token) return;
-    
-    // ... rest of the function is fine
+    // ... rest unchanged ...
 }
 
 async function fetchAnalysisHistory() {
-    // MODIFIED: Use Capacitor Preferences to get the token
-    const { value: token } = await Preferences.get({ key: 'accessToken' });
+    const token = localStorage.getItem('accessToken');
     if (!token) return;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/analysis/history`, {
+        const response = await fetch(${API_BASE_URL}/analysis/history, {
             method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': Bearer ${token} }
         });
 
         if (response.ok) {
@@ -246,7 +230,7 @@ async function fetchAnalysisHistory() {
 }
 
 // --- CORE FUNCTIONS ---
-// ... no changes needed to setLanguage, showScreen, setupBlinds, open/close sidebar, start/stop camera, updateGauge, populateResults, etc. ...
+// keep your setLanguage, showScreen, setupBlinds, etc.
 
 // --- EVENT LISTENERS ---
 window.addEventListener('load', () => {
@@ -255,18 +239,12 @@ window.addEventListener('load', () => {
     if (dateElement) {
         dateElement.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
-    // MODIFIED: Check auth status instead of just showing the language screen
     checkAuthStatus();
 });
 
-// ... other event listeners are fine, except for the sign out button ...
-
-document.getElementById('menu-signout-btn')?.addEventListener('click', async (e) => { // MODIFIED: Make async
+document.getElementById('menu-signout-btn')?.addEventListener('click', (e) => {
     e.preventDefault();
-    // MODIFIED: Use Capacitor Preferences to remove the token
-    await Preferences.remove({ key: 'accessToken' });
+    localStorage.removeItem('accessToken');
     closeSidebar();
     showScreen('secure-login-screen');
 });
-
-// ... all other event listeners ...
