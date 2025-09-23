@@ -24,9 +24,13 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- Middleware ---
+origins = [
+    "https://bovilens-frontend.onrender.com", # <-- PASTE YOUR FRONTEND URL HERE
+    # You can add http://localhost:8000 for future local testing if you want
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
