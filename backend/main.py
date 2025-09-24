@@ -13,8 +13,7 @@ from slowapi.util import get_remote_address
 
 import database, models, security, services, config
 from config import settings
-from services.analysis_service import AnalysisService  # Adjust path if needed
-
+from services.analysis_service import AnalysisService  # Correct import path
 
 # --- App Initialization ---
 app = FastAPI(title="Bovilens API")
@@ -23,24 +22,31 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 origins = [
+    "https://bovilens-frontend.onrender.com",  # Replace with your actual frontend URL
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://bovilens-frontend.onrender.com",  # Replace with your actual frontend URL
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (POST, GET, OPTIONS, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
 # --- Uploads directory ---
 UPLOADS_DIR = "backend/uploads"
+# The directory for annotated images should be inside UPLOADS_DIR for correct mounting.
+ANNOTATED_DIR = os.path.join(UPLOADS_DIR, "annotated") 
+
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(ANNOTATED_DIR, exist_ok=True)
+
+# Mount the entire uploads directory to be accessible via /uploads
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
 
 # --- Global Analysis Service (load models once) ---
 analysis_service = None
@@ -151,7 +157,8 @@ async def create_analysis(
         if analysis_service is None:
             raise HTTPException(status_code=500, detail="Analysis service not initialized.")
         
-        analysis_result = analysis_service.run_full_analysis(file_path)
+        # CORRECTED: Calling `run_analysis` to match your mock service
+        analysis_result = analysis_service.run_analysis(file_path)
         if analysis_result is None:
             raise HTTPException(status_code=400, detail="Invalid image: No cattle or buffalo could be detected.")
     except HTTPException as e:
@@ -163,17 +170,18 @@ async def create_analysis(
     # Prepare DB entry
     user = await database.user_collection.find_one({"username": current_user.username})
     annotated_path = analysis_result["annotated_image_path"]
-    annotated_filename = os.path.basename(annotated_path)
-    base_url = "https://bovilens.onrender.com/uploads"
-    annotated_url = f"{base_url}/{annotated_filename}"
+    
+    # CORRECTED: Store the full URL to the annotated image
+    # The URL needs to be constructed on the backend for correctness
+    annotated_url = f"/uploads/annotated/{os.path.basename(annotated_path)}"
 
     db_entry = {
         "user_id": str(user["_id"]),
-        "animal_type": analysis_result["class_name"],
+        "animal_type": analysis_result["animal_type"], # Corrected key
         "original_image_url": unique_filename,
-        "annotated_image_url": annotated_filename,
-        "overall_score": analysis_result["scores"]["overall_score"],
-        "trait_scores": analysis_result["scores"]["trait_scores"],
+        "annotated_image_url": annotated_url, # CORRECTED: Store the full URL
+        "overall_score": analysis_result["overall_score"], # Corrected key
+        "trait_scores": analysis_result["trait_scores"], # Corrected key
         "timestamp": datetime.now(timezone.utc)
     }
     
