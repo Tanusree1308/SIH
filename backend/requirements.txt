@@ -1,28 +1,23 @@
-# backend/requirements.txt
-
 # FastAPI and Server
 fastapi
 uvicorn[standard]
 python-multipart
 
 # Database
-motor # Async MongoDB driver
+motor
 pydantic[email]
-pydantic-settings # For advanced validation
+pydantic-settings
 
-# Security
-passlib[bcrypt]
+# Security (Fixed for known compatibility)
+passlib==1.7.4
+bcrypt==4.1.0
 python-jose[cryptography]
 slowapi
 
 # Configuration
 python-dotenv
-passlib==1.7.4
-bcrypt==4.1.0
 
-
-
-# --- Machine Learning ---
+# Machine Learning
 # Install these separately if you have issues
 # deeplabcut
 # ultralytics # For YOLO
@@ -30,7 +25,6 @@ bcrypt==4.1.0
 # Image Processing
 opencv-python-headless
 Pillow
+
 # Machine Learning
 tensorflow
-opencv-python-headless
-Pillow
