@@ -1,230 +1,218 @@
-import tensorflow as tf
-import numpy as np
-import cv2
 import os
-from fastapi import HTTPException
+import uuid
+from datetime import timedelta, timezone, datetime
+import traceback
+import numpy as np
 
-# --- Keypoint Mapping ---
-# IMPORTANT: You MUST verify this mapping matches your pose estimation model's output.
-# This is an example for a 9-keypoint model.
-KEYPOINT_DICT = {
-    'Nose': 0,
-    'Withers': 1,      # Top of the shoulders
-    'Shoulder': 2,
-    'Hip': 3,
-    'TailBase': 4,
-    'FrontHoof': 5,
-    'RearHoof': 6,
-    'ChestBottom': 7,
-    'HipHeightPoint': 8 # A point vertically above the hip for height measurement
-}
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2PasswordRequestForm
+from slowapi.errors import RateLimitExceeded
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 
+import database, models, security, config
+from config import settings
+
+# --- MOCK Analysis Service (You will replace this) ---
 class AnalysisService:
     def __init__(self):
-        # --- START OF FIX ---
-        # Build a reliable, absolute path to the models directory
-        # This works even when deployed on a server like Render
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        base_dir = os.path.join(current_dir, '..') # Go up from 'services' to 'backend'
+        print("✅ AnalysisService initialized.")
+        pass
+
+    def run_analysis(self, file_path: str):
+        """
+        This is the method that was missing. It now contains mock logic
+        to simulate your deep learning model's output.
+
+        You will replace the contents of this function with your actual
+        YOLOv8, MediaPipe, and measurement/scoring logic.
+        """
+        print(f"Simulating analysis for file: {file_path}")
+
+        # 1. Simulate Measurement Calculation
+        measurements = {
+            "height_at_withers": f"{np.random.randint(120, 180)} cm",
+            "body_length": f"{np.random.randint(150, 220)} cm",
+            "chest_width": f"{np.random.randint(80, 110)} cm",
+            "rump_angle": f"{np.random.randint(5, 25)} degrees"
+        }
         
-        object_model_path = os.path.join(base_dir, 'models', 'object_detection.tflite')
-        pose_model_path = os.path.join(base_dir, 'models', 'pose_estimation.tflite')
-        # --- END OF FIX ---
-
-        # The rest of your code remains the same
-        if not os.path.exists(object_model_path):
-            # This error message will now print the full, absolute path for better debugging
-            raise FileNotFoundError(f"❌ Object detection model not found at {object_model_path}")
-
-        self.object_detector = tf.lite.Interpreter(model_path=object_model_path)
-        self.object_detector.allocate_tensors()
-
-        self.obj_input_details = self.object_detector.get_input_details()
-        self.obj_output_details = self.object_detector.get_output_details()
-
-        if not os.path.exists(pose_model_path):
-            raise FileNotFoundError(f"❌ Pose estimation model not found at {pose_model_path}")
-
-        self.pose_estimator = tf.lite.Interpreter(model_path=pose_model_path)
-        self.pose_estimator.allocate_tensors()
-
-        self.pose_input_details = self.pose_estimator.get_input_details()
-        self.pose_output_details = self.pose_estimator.get_output_details()
-
-        print("✅ Models loaded successfully!")
-
-
-    def preprocess_image(self, image_path, input_shape):
-        """
-        Loads and preprocesses an image for the model.
-        """
-        image = cv2.imread(image_path)
-        if image is None:
-            raise ValueError(f"❌ Could not read image: {image_path}")
-
-        height, width = input_shape[1], input_shape[2]
-        image_resized = cv2.resize(image, (width, height))
-        input_data = np.expand_dims(image_resized, axis=0).astype(np.float32)
-        return input_data
-
-    def run_object_detection(self, image_path):
-        """
-        Runs object detection on the given image. Returns the highest-scoring detection.
-        """
-        input_data = self.preprocess_image(image_path, self.obj_input_details[0]['shape'])
-
-        self.object_detector.set_tensor(self.obj_input_details[0]['index'], input_data)
-        self.object_detector.invoke()
-
-        boxes = self.object_detector.get_tensor(self.obj_output_details[0]['index'])
-        classes = self.object_detector.get_tensor(self.obj_output_details[1]['index'])
-        scores = self.object_detector.get_tensor(self.obj_output_details[2]['index'])
+        # 2. Simulate ATC Scores (1-5) as a list of dictionaries
+        # CORRECTED: This now returns a list to match the Pydantic model
+        trait_scores = [
+            {"trait_name": "Body Length", "score": np.random.randint(1, 6)},
+            {"trait_name": "Withers Height", "score": np.random.randint(1, 6)},
+            {"trait_name": "Chest Depth", "score": np.random.randint(1, 6)},
+            {"trait_name": "Body Width", "score": np.random.randint(1, 6)},
+        ]
         
-        if scores[0].any():
-            best_score_index = np.argmax(scores[0])
-            return {
-                "boxes": [boxes[0][best_score_index].tolist()],
-                "classes": [classes[0][best_score_index].tolist()],
-                "scores": [scores[0][best_score_index].tolist()]
-            }
-        return {"boxes": [], "classes": [], "scores": []}
-
-    def run_pose_estimation(self, image_path):
-        """
-        Runs pose estimation on the given image.
-        """
-        input_data = self.preprocess_image(image_path, self.pose_input_details[0]['shape'])
-
-        self.pose_estimator.set_tensor(self.pose_input_details[0]['index'], input_data)
-        self.pose_estimator.invoke()
-
-        keypoints = self.pose_estimator.get_tensor(self.pose_output_details[0]['index'])
-        return {"keypoints": keypoints.tolist()}
-
-    def calculate_distance(self, keypoints, point1_name, point2_name):
-        """Calculates the Euclidean distance between two keypoints by name."""
-        p1_index = KEYPOINT_DICT[point1_name]
-        p2_index = KEYPOINT_DICT[point2_name]
+        overall_score = sum(item['score'] for item in trait_scores) / len(trait_scores)
         
-        p1 = keypoints[0][0][p1_index]
-        p2 = keypoints[0][0][p2_index]
+        # 3. Simulate an annotated image path
+        mock_annotated_path = os.path.join(UPLOADS_DIR, "annotated", "mock_annotated_image.png")
+        if not os.path.exists(os.path.dirname(mock_annotated_path)):
+            os.makedirs(os.path.dirname(mock_annotated_path))
+        with open(mock_annotated_path, "w") as f:
+            f.write("mock content")
 
-        # Keypoint format is often [y, x, confidence]. Check confidence score.
-        # Assuming confidence is the 3rd element. If your model doesn't provide it, check p1[0] > 0
-        if len(p1) < 3 or len(p2) < 3 or p1[2] == 0 or p2[2] == 0:
-            return 0
-
-        # Note: TFLite models often output (y, x). We use them as is.
-        distance = np.sqrt((p2[1] - p1[1])**2 + (p2[0] - p1[0])**2)
-        return distance
-
-    def score_trait(self, measured_distance, ideal_distance, acceptable_range_percent=0.10):
-        """Converts a measured distance into a 1-5 score."""
-        if measured_distance == 0:
-            return 1.0
-
-        deviation = abs(measured_distance - ideal_distance)
-        acceptable_range = ideal_distance * acceptable_range_percent
-        
-        if deviation <= acceptable_range:
-            return 5.0
-        
-        # Scale score down based on how far it deviates from the ideal
-        score = 5.0 - (deviation / ideal_distance) * 4.0
-        return round(max(1.0, min(5.0, score)), 1)
-
-    def calculate_atp_score(self, pose_results):
-        """
-        Calculates the ATP score based on keypoint distances.
-        """
-        keypoints = pose_results["keypoints"]
-
-        # --- DEFINE IDEAL MEASUREMENTS (in pixels) ---
-        # ❗IMPORTANT: You MUST tune these values by measuring sample images of high-quality animals.
-        IDEAL_BODY_LENGTH = 250  # Distance from Withers to Hip
-        IDEAL_WITHERS_HEIGHT = 220 # Distance from Withers to Front Hoof
-        IDEAL_HIP_HEIGHT = 215 # Distance from Hip to Rear Hoof
-        
-        # --- 1. Calculate Actual Distances ---
-        body_length = self.calculate_distance(keypoints, 'Withers', 'Hip')
-        withers_height = self.calculate_distance(keypoints, 'Withers', 'FrontHoof')
-        hip_height = self.calculate_distance(keypoints, 'Hip', 'RearHoof')
-
-        # --- 2. Score Each Trait ---
-        body_length_score = self.score_trait(body_length, IDEAL_BODY_LENGTH)
-        withers_height_score = self.score_trait(withers_height, IDEAL_WITHERS_HEIGHT)
-        hip_height_score = self.score_trait(hip_height, IDEAL_HIP_HEIGHT)
-
-        # --- 3. Calculate Overall Score (example: weighted average) ---
-        weights = {'length': 0.4, 'height': 0.6}
-        avg_height_score = (withers_height_score + hip_height_score) / 2
-        overall_score = (body_length_score * weights['length']) + (avg_height_score * weights['height'])
-        
         return {
-            "overall_score": round(max(1.0, overall_score), 1),
-            "trait_scores": [
-                {"trait_name": "Body Length", "score": body_length_score},
-                {"trait_name": "Withers Height", "score": withers_height_score},
-                {"trait_name": "Hip Height", "score": hip_height_score},
-            ]
+            "animal_type": "Cattle",
+            "overall_score": round(overall_score, 2),
+            "trait_scores": trait_scores,
+            "annotated_image_path": mock_annotated_path
         }
 
-        def run_full_analysis(self, image_path):
-            try:
-                # --- 1. Object detection ---
-                detection_results = self.run_object_detection(image_path)
-                if not detection_results["scores"]:
-                    raise ValueError("No animal detected in the image.")
 
-                class_id = int(detection_results["classes"][0][0])
-                class_names = ['cow', 'buffalo']  # adjust if you have more classes
-                animal_type = class_names[class_id] if class_id < len(class_names) else "unknown"
+# --- App Initialization ---
+app = FastAPI(title="Bovilens API")
 
-                # --- 2. Pose estimation ---
-                pose_results = self.run_pose_estimation(image_path)
-                if not pose_results["keypoints"]:
-                    raise ValueError("Pose estimation failed.")
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-                # --- 3. ATP scoring ---
-                scores = self.calculate_atp_score(pose_results)
+# --- Middleware ---
+origins = [
+    "https://bovilens-frontend.onrender.com", # deployed frontend
+    "http://localhost:3000",                  # local dev
+    "http://127.0.0.1:3000"                   # alternative local
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-                # --- 4. Annotate image ---
-                img = cv2.imread(image_path)
-                h, w, _ = img.shape
+# --- Uploads directory ---
+UPLOADS_DIR = "backend/uploads"
+ANNOTATED_DIR = os.path.join(UPLOADS_DIR, "annotated")
 
-                # Draw bounding box
-                box = detection_results["boxes"][0]
-                y1, x1, y2, x2 = int(box[0] * h), int(box[1] * w), int(box[2] * h), int(box[3] * w)
-                cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
-                cv2.putText(img, animal_type, (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(ANNOTATED_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
-                # Draw keypoints
-                keypoints = pose_results["keypoints"][0][0]
-                for (y, x, conf) in keypoints:
-                    if conf > 0.5:
-                        cx, cy = int(x * w), int(y * h)
-                        cv2.circle(img, (cx, cy), 5, (0, 0, 255), -1)
 
-                # Save annotated version
-                annotated_path = image_path.replace("uploads", "uploads/annotated")
-                os.makedirs(os.path.dirname(annotated_path), exist_ok=True)
-                cv2.imwrite(annotated_path, img)
+# --- Global Analysis Service ---
+analysis_service = None
 
-                # --- 5. Return result ---
-                final_result = {
-                    "status": "success",
-                    "animal_type": animal_type,
-                    "annotated_image_path": annotated_path,
-                }
-                final_result.update(scores)
-                return final_result
+@app.on_event("startup")
+async def startup_event():
+    global analysis_service
+    try:
+        analysis_service = AnalysisService()
+        print("✅ AnalysisService initialized and models loaded.")
+    except Exception as e:
+        print(f"FATAL: Could not initialize AnalysisService: {e}")
+        raise
 
-            except Exception as e:
-                # Ensure 'animal_type' always exists, even on error
-                return {
-                    "status": "error",
-                    "animal_type": "unknown",
-                    "message": str(e),
-                    "annotated_image_path": None
-                }
+
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Bovilens API"}
+
+
+# --- Authentication Routes ---
+@app.post("/auth/register", response_model=models.UserInResponse, status_code=201)
+@limiter.limit("5/minute")
+async def register_user(user: models.UserCreate, request: Request):
+    existing_user = await database.user_collection.find_one({"username": user.username})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    hashed_password = security.get_password_hash(user.password)
+    user_dict = user.model_dump()
+    user_dict["hashed_password"] = hashed_password
+    del user_dict["password"]
+
+    await database.user_collection.insert_one(user_dict)
+    created_user = await database.user_collection.find_one({"username": user.username})
+    return models.UserInResponse.model_validate(created_user)
+
+
+@app.post("/auth/login", response_model=models.Token)
+@limiter.limit("10/minute")
+async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await database.user_collection.find_one({"username": form_data.username})
+    if not user or not security.verify_password(form_data.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = security.create_access_token(
+        data={"sub": user["username"]},
+        expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.get("/users/me", response_model=models.UserInResponse)
+async def read_users_me(current_user: models.TokenData = Depends(security.get_current_user)):
+    user = await database.user_collection.find_one({"username": current_user.username})
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return models.UserInResponse.model_validate(user)
+
+
+# --- Analysis Routes ---
+@app.post("/analysis/", response_model=models.AnalysisResult)
+@limiter.limit("15/hour")
+async def create_analysis(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: models.TokenData = Depends(security.get_current_user)
+):
+    file_extension = file.filename.split(".")[-1]
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = os.path.join(UPLOADS_DIR, unique_filename)
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    try:
+        if analysis_service is None:
+            raise HTTPException(status_code=500, detail="Analysis service not initialized.")
+
+        analysis_result = analysis_service.run_analysis(file_path)
+        if analysis_result is None:
+            raise HTTPException(status_code=400, detail="Invalid image: No cattle or buffalo detected.")
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+    user = await database.user_collection.find_one({"username": current_user.username})
+
+    annotated_path = analysis_result["annotated_image_path"]
+    annotated_url = (
+        f"/uploads/annotated/{os.path.basename(annotated_path)}"
+        if annotated_path else None
+    )
+
+    db_entry = {
+        "user_id": str(user["_id"]),
+        "animal_type": analysis_result["animal_type"],
+        "original_image_url": unique_filename,
+        "annotated_image_url": annotated_url,
+        "overall_score": analysis_result["overall_score"],
+        "trait_scores": analysis_result["trait_scores"],
+        "timestamp": datetime.now(timezone.utc)
+    }
+
+    inserted_doc = await database.analysis_collection.insert_one(db_entry)
+    created_analysis = await database.analysis_collection.find_one({"_id": inserted_doc.inserted_id})
+    return models.AnalysisResult.model_validate(created_analysis)
+
+
+@app.get("/analysis/history", response_model=list[models.AnalysisResult])
+async def get_analysis_history(current_user: models.TokenData = Depends(security.get_current_user)):
+    user = await database.user_collection.find_one({"username": current_user.username})
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    history_cursor = database.analysis_collection.find(
+        {"user_id": str(user["_id"])}
+    ).sort("timestamp", -1).limit(5)
+    
+    history_list = await history_cursor.to_list(length=None) 
+    return [models.AnalysisResult.model_validate(item) for item in history_list]
