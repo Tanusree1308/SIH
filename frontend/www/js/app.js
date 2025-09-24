@@ -23,47 +23,50 @@ const blindsOverlay = document.getElementById('blinds-transition-overlay');
 
 // --- THIS FUNCTION IS NOW FIXED TO PREVENT THE RACE CONDITION ---
 async function checkAuthStatus() {
-    const maxWaitTime = 3000; // Wait a maximum of 3 seconds
-    const intervalTime = 100; // Check every 100ms
-    let elapsedTime = 0;
+    // Fade out the splash screen first.
+    setTimeout(() => {
+        document.getElementById('splash-screen')?.classList.add('fade-out');
+    }, 250);
 
-    const intervalId = setInterval(async () => {
-        // Check if the Capacitor libraries are loaded and ready
+    // After a short delay, hide the splash screen and perform the auth check.
+    setTimeout(async () => {
+        // Hide the splash screen element
+        const splashScreen = document.getElementById('splash-screen');
+        if (splashScreen) {
+            splashScreen.classList.add('hidden');
+        }
+
+        let isLoggedIn = false;
+
+        // Check for Capacitor plugins and a stored access token.
+        // This is a more direct and reliable check.
         if (window.Capacitor && window.Capacitor.Plugins) {
-            clearInterval(intervalId); // Stop checking
-            runAuthLogic(); // Run the real logic
-            return;
+            try {
+                const { Preferences } = window.Capacitor.Plugins;
+                const { value: token } = await Preferences.get({ key: 'accessToken' });
+                if (token) {
+                    console.log('User is already logged in.');
+                    isLoggedIn = true;
+                    // Fetch history as the user is going to the dashboard.
+                    fetchAnalysisHistory(); 
+                }
+            } catch (error) {
+                // If there's any issue with Capacitor or Preferences, we assume no token.
+                console.error('Error accessing Capacitor Preferences:', error);
+            }
+        } else {
+            // Log a message if Capacitor isn't available, but still proceed.
+            console.log('Capacitor is not available. Proceeding to login flow.');
         }
 
-        elapsedTime += intervalTime;
-        if (elapsedTime >= maxWaitTime) {
-            // We've waited long enough. Assume Capacitor won't load (e.g., non-native browser)
-            clearInterval(intervalId); // Stop checking
-            console.log('Capacitor timed out or not available. Proceeding to login flow.');
-            proceedToLoginFlow();
-        }
-    }, intervalTime);
-
-    const runAuthLogic = async () => {
-        const { Preferences } = window.Capacitor.Plugins;
-        const { value } = await Preferences.get({ key: 'accessToken' });
-        if (value) {
-            console.log('User is already logged in.');
-            fetchAnalysisHistory();
+        // Now, show the correct screen based on the result.
+        if (isLoggedIn) {
             showScreen('dashboard-screen');
         } else {
-            console.log('User needs to log in.');
-            proceedToLoginFlow();
+            showScreen('language-screen');
         }
-    };
-
-    const proceedToLoginFlow = () => {
-        setTimeout(() => { document.getElementById('splash-screen')?.classList.add('fade-out'); }, 250);
-        setTimeout(() => { showScreen('language-screen'); }, 750);
-    };
+    }, 750); // This delay should be longer than the fade-out time.
 }
-
-
 // --- API FUNCTIONS ---
 async function registerUser(event) {
     event.preventDefault();
