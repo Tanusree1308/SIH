@@ -170,59 +170,59 @@ class AnalysisService:
         }
 
     def run_full_analysis(self, image_path):
-    try:
-        # --- 1. Object detection ---
-        detection_results = self.run_object_detection(image_path)
-        if not detection_results["scores"]:
-            raise ValueError("No animal detected in the image.")
+        try:
+            # --- 1. Object detection ---
+            detection_results = self.run_object_detection(image_path)
+            if not detection_results["scores"]:
+                raise ValueError("No animal detected in the image.")
 
-        class_id = int(detection_results["classes"][0][0])
-        class_names = ['cow', 'buffalo']  # adjust if you have more classes
-        animal_type = class_names[class_id] if class_id < len(class_names) else "unknown"
+            class_id = int(detection_results["classes"][0][0])
+            class_names = ['cow', 'buffalo']  # adjust if you have more classes
+            animal_type = class_names[class_id] if class_id < len(class_names) else "unknown"
 
-        # --- 2. Pose estimation ---
-        pose_results = self.run_pose_estimation(image_path)
-        if not pose_results["keypoints"]:
-            raise ValueError("Pose estimation failed.")
+            # --- 2. Pose estimation ---
+            pose_results = self.run_pose_estimation(image_path)
+            if not pose_results["keypoints"]:
+                raise ValueError("Pose estimation failed.")
 
-        # --- 3. ATP scoring ---
-        scores = self.calculate_atp_score(pose_results)
+            # --- 3. ATP scoring ---
+            scores = self.calculate_atp_score(pose_results)
 
-        # --- 4. Annotate image ---
-        img = cv2.imread(image_path)
-        h, w, _ = img.shape
+            # --- 4. Annotate image ---
+            img = cv2.imread(image_path)
+            h, w, _ = img.shape
 
-        # Draw bounding box
-        box = detection_results["boxes"][0]
-        y1, x1, y2, x2 = int(box[0] * h), int(box[1] * w), int(box[2] * h), int(box[3] * w)
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
-        cv2.putText(img, animal_type, (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            # Draw bounding box
+            box = detection_results["boxes"][0]
+            y1, x1, y2, x2 = int(box[0] * h), int(box[1] * w), int(box[2] * h), int(box[3] * w)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+            cv2.putText(img, animal_type, (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-        # Draw keypoints (simple circles)
-        keypoints = pose_results["keypoints"][0][0]
-        for (y, x, conf) in keypoints:
-            if conf > 0.5:  # draw only confident points
-                cx, cy = int(x * w), int(y * h)
-                cv2.circle(img, (cx, cy), 5, (0, 0, 255), -1)
+            # Draw keypoints (simple circles)
+            keypoints = pose_results["keypoints"][0][0]
+            for (y, x, conf) in keypoints:
+                if conf > 0.5:  # draw only confident points
+                    cx, cy = int(x * w), int(y * h)
+                    cv2.circle(img, (cx, cy), 5, (0, 0, 255), -1)
 
-        # Save annotated version
-        annotated_path = image_path.replace("uploads", "uploads/annotated")
-        os.makedirs(os.path.dirname(annotated_path), exist_ok=True)
-        cv2.imwrite(annotated_path, img)
+            # Save annotated version
+            annotated_path = image_path.replace("uploads", "uploads/annotated")
+            os.makedirs(os.path.dirname(annotated_path), exist_ok=True)
+            cv2.imwrite(annotated_path, img)
 
-        # --- 5. Return result ---
-        final_result = {
-            "status": "success",
-            "animal_type": animal_type,
-            "annotated_image_path": annotated_path,
-        }
-        final_result.update(scores)
-        return final_result
+            # --- 5. Return result ---
+            final_result = {
+                "status": "success",
+                "animal_type": animal_type,
+                "annotated_image_path": annotated_path,
+            }
+            final_result.update(scores)
+            return final_result
 
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e),
-            "annotated_image_path": None
-        }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e),
+                "annotated_image_path": None
+            }
