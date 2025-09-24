@@ -2,6 +2,7 @@ import os
 import uuid
 from datetime import timedelta, timezone, datetime
 import traceback
+import numpy as np # Import numpy for mock data generation
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +14,60 @@ from slowapi.util import get_remote_address
 
 import database, models, security, config
 from config import settings
-from services.analysis_service import AnalysisService  # Adjust path if needed
+# services.analysis_service is commented out because the class is defined below
+# from services.analysis_service import AnalysisService
+
+# --- MOCK Analysis Service (You will replace this) ---
+class AnalysisService:
+    def __init__(self):
+        # In a real project, this is where you would load your models
+        # For example: self.model = load_model('path/to/your/model.h5')
+        print("✅ AnalysisService initialized.")
+        pass
+
+    def run_analysis(self, file_path: str):
+        """
+        This is the method that was missing. It now contains mock logic
+        to simulate your deep learning model's output.
+
+        You will replace the contents of this function with your actual
+        YOLOv8, MediaPipe, and measurement/scoring logic.
+        """
+        # --- REPLACE THIS MOCK LOGIC WITH YOUR REAL CODE ---
+        print(f"Simulating analysis for file: {file_path}")
+
+        # 1. Simulate Measurement Calculation
+        measurements = {
+            "height_at_withers": f"{np.random.randint(120, 180)} cm",
+            "body_length": f"{np.random.randint(150, 220)} cm",
+            "chest_width": f"{np.random.randint(80, 110)} cm",
+            "rump_angle": f"{np.random.randint(5, 25)} degrees"
+        }
+        
+        # 2. Simulate ATC Scores (1-5)
+        trait_scores = {
+            "trait_1": np.random.randint(1, 6),
+            "trait_2": np.random.randint(1, 6),
+            "trait_3": np.random.randint(1, 6),
+            "trait_4": np.random.randint(1, 6)
+        }
+        overall_score = sum(trait_scores.values()) / len(trait_scores)
+        
+        # 3. Simulate an annotated image path (for demonstration)
+        # In a real scenario, your model would save an annotated image and return its path
+        mock_annotated_path = os.path.join(UPLOADS_DIR, "annotated", "mock_annotated_image.png")
+        if not os.path.exists(os.path.dirname(mock_annotated_path)):
+            os.makedirs(os.path.dirname(mock_annotated_path))
+        # Create a dummy file to avoid errors
+        with open(mock_annotated_path, "w") as f:
+            f.write("mock content")
+
+        return {
+            "animal_type": "Cattle", # A mock prediction
+            "overall_score": round(overall_score, 2),
+            "trait_scores": trait_scores,
+            "annotated_image_path": mock_annotated_path
+        }
 
 
 # --- App Initialization ---
@@ -35,10 +89,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Uploads directory ---
+# --- Uploads directory and annotated directory setup ---
 UPLOADS_DIR = "backend/uploads"
+ANNOTATED_DIR = os.path.join(UPLOADS_DIR, "annotated")
+
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(ANNOTATED_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
 
 # --- Global Analysis Service ---
 analysis_service = None
@@ -74,7 +132,7 @@ async def register_user(user: models.UserCreate, request: Request):
     del user_dict["password"]
     
     new_user = await database.user_collection.insert_one(user_dict)
-    created_user = await database.user_collection.find_one({"_id": new_user.inserted_id})
+    created_user = await database.user_collection.find_one({"username": user.username})
     return models.UserInResponse.model_validate(created_user)
 
 
@@ -149,7 +207,7 @@ async def create_analysis(
         if analysis_service is None:
             raise HTTPException(status_code=500, detail="Analysis service not initialized.")
         
-        analysis_result = analysis_service.run_analysis(file_path)  
+        analysis_result = analysis_service.run_analysis(file_path)
         if analysis_result is None:
             raise HTTPException(status_code=400, detail="Invalid image: No cattle or buffalo could be detected.")
     except HTTPException as e:
@@ -161,7 +219,6 @@ async def create_analysis(
     # Prepare DB entry
     user = await database.user_collection.find_one({"username": current_user.username})
     
-    # --- MODIFIED LINE ONLY ---
     annotated_path = analysis_result["annotated_image_path"]
     annotated_url = (
         f"/uploads/annotated/{os.path.basename(annotated_path)}"
@@ -170,7 +227,7 @@ async def create_analysis(
 
     db_entry = {
         "user_id": str(user["_id"]),
-        "animal_type": analysis_result["animal_type"],  # fixed key
+        "animal_type": analysis_result["animal_type"],
         "original_image_url": unique_filename,
         "annotated_image_url": annotated_url,
         "overall_score": analysis_result["overall_score"],
