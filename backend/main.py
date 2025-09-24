@@ -21,6 +21,8 @@ app = FastAPI(title="Bovilens API")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- CORRECTED: CORS Middleware for local testing ---
 origins = [
     "https://bovilens-frontend.onrender.com",  # Replace with your actual frontend URL
     "http://localhost:3000",
@@ -29,24 +31,24 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    # Use a wildcard to allow all origins for debugging
+    # Once fixed, change back to `allow_origins=origins`
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# --- Uploads directory ---
-UPLOADS_DIR = "backend/uploads"
-# The directory for annotated images should be inside UPLOADS_DIR for correct mounting.
-ANNOTATED_DIR = os.path.join(UPLOADS_DIR, "annotated") 
+# --- CORRECTED: Uploads directory to be relative to the script location ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+ANNOTATED_DIR = os.path.join(UPLOADS_DIR, "annotated")
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(ANNOTATED_DIR, exist_ok=True)
 
 # Mount the entire uploads directory to be accessible via /uploads
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
-
 
 # --- Global Analysis Service (load models once) ---
 analysis_service = None
@@ -157,7 +159,7 @@ async def create_analysis(
         if analysis_service is None:
             raise HTTPException(status_code=500, detail="Analysis service not initialized.")
         
-        # CORRECTED: Calling `run_analysis` to match your mock service
+        # Calling `run_analysis` to match your mock service
         analysis_result = analysis_service.run_analysis(file_path)
         if analysis_result is None:
             raise HTTPException(status_code=400, detail="Invalid image: No cattle or buffalo could be detected.")
@@ -171,17 +173,16 @@ async def create_analysis(
     user = await database.user_collection.find_one({"username": current_user.username})
     annotated_path = analysis_result["annotated_image_path"]
     
-    # CORRECTED: Store the full URL to the annotated image
-    # The URL needs to be constructed on the backend for correctness
+    # CORRECTED: Store the full URL to the annotated image in the database
     annotated_url = f"/uploads/annotated/{os.path.basename(annotated_path)}"
 
     db_entry = {
         "user_id": str(user["_id"]),
-        "animal_type": analysis_result["animal_type"], # Corrected key
+        "animal_type": analysis_result["animal_type"],
         "original_image_url": unique_filename,
-        "annotated_image_url": annotated_url, # CORRECTED: Store the full URL
-        "overall_score": analysis_result["overall_score"], # Corrected key
-        "trait_scores": analysis_result["trait_scores"], # Corrected key
+        "annotated_image_url": annotated_url,
+        "overall_score": analysis_result["overall_score"],
+        "trait_scores": analysis_result["trait_scores"],
         "timestamp": datetime.now(timezone.utc)
     }
     
