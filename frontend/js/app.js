@@ -102,35 +102,39 @@ async function registerUser(event) {
 }
 
 async function loginUser(event) {
-    event.preventDefault();
-    const form = event.target;
-    const formData = new FormData(form);
-    const body = new URLSearchParams();
-    body.append('username', formData.get('username'));
-    body.append('password', formData.get('password'));
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    // Create URLSearchParams object from the form data
+    const body = new URLSearchParams(formData);
 
-    try {
-        const response = await fetch(`${API_BASE_URL}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body,
-        });
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: 'POST',
+            // Correctly set the Content-Type header
+            headers: { 
+                'Content-Type': 'application/x-www-form-urlencoded' 
+            },
+            // Send the URLSearchParams object directly
+            body: body,
+        });
 
-        const result = await response.json();
-        if (!response.ok) {
-            alert(`Login failed: ${result.detail}`);
-        } else {
-            await setAuthToken(result.access_token); // Use helper
-            fetchAnalysisHistory();
-            showScreen('dashboard-screen');
-            form.reset();
-        }
-    } catch (error) {
-        console.error('Login error:', error);
-        alert("An error occurred during login. Please ensure the backend is running.");
-    }
+        // The rest of the code is correct
+        const result = await response.json();
+        if (!response.ok) {
+            alert(`Login failed: ${result.detail}`);
+        } else {
+            await setAuthToken(result.access_token);
+            fetchAnalysisHistory();
+            showScreen('dashboard-screen');
+            form.reset();
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        alert("An error occurred during login. Please ensure the backend is running.");
+    }
 }
-
 async function analyzeImage(event) {
     event.preventDefault();
     const fileInput = document.getElementById('file-input');
