@@ -149,7 +149,7 @@ async def create_analysis(
         if analysis_service is None:
             raise HTTPException(status_code=500, detail="Analysis service not initialized.")
         
-        analysis_result = analysis_service.run_full_analysis(file_path)
+        analysis_result = analysis_service.run_analysis(file_path)  
         if analysis_result is None:
             raise HTTPException(status_code=400, detail="Invalid image: No cattle or buffalo could be detected.")
     except HTTPException as e:

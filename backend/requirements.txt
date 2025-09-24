@@ -17,6 +17,8 @@ slowapi
 
 # Configuration
 python-dotenv
+passlib==1.7.4
+
 
 # --- Machine Learning ---
 # Install these separately if you have issues
