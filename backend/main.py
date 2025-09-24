@@ -2,7 +2,6 @@ import os
 import uuid
 from datetime import timedelta, timezone, datetime
 import traceback
-import numpy as np
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,56 +13,7 @@ from slowapi.util import get_remote_address
 
 import database, models, security, config
 from config import settings
-
-# --- MOCK Analysis Service (You will replace this) ---
-class AnalysisService:
-    def __init__(self):
-        print("✅ AnalysisService initialized.")
-        pass
-
-    def run_analysis(self, file_path: str):
-        """
-        This is the method that was missing. It now contains mock logic
-        to simulate your deep learning model's output.
-
-        You will replace the contents of this function with your actual
-        YOLOv8, MediaPipe, and measurement/scoring logic.
-        """
-        print(f"Simulating analysis for file: {file_path}")
-
-        # 1. Simulate Measurement Calculation
-        measurements = {
-            "height_at_withers": f"{np.random.randint(120, 180)} cm",
-            "body_length": f"{np.random.randint(150, 220)} cm",
-            "chest_width": f"{np.random.randint(80, 110)} cm",
-            "rump_angle": f"{np.random.randint(5, 25)} degrees"
-        }
-
-        # 2. Simulate ATC Scores (1-5) as a list of dictionaries
-        # CORRECTED: This now returns a list to match the Pydantic model
-        trait_scores = [
-            {"trait_name": "Body Length", "score": np.random.randint(1, 6)},
-            {"trait_name": "Withers Height", "score": np.random.randint(1, 6)},
-            {"trait_name": "Chest Depth", "score": np.random.randint(1, 6)},
-            {"trait_name": "Body Width", "score": np.random.randint(1, 6)},
-        ]
-
-        overall_score = sum(item['score'] for item in trait_scores) / len(trait_scores)
-
-        # 3. Simulate an annotated image path
-        mock_annotated_path = os.path.join(UPLOADS_DIR, "annotated", "mock_annotated_image.png")
-        if not os.path.exists(os.path.dirname(mock_annotated_path)):
-            os.makedirs(os.path.dirname(mock_annotated_path))
-        with open(mock_annotated_path, "w") as f:
-            f.write("mock content")
-
-        return {
-            "animal_type": "Cattle",
-            "overall_score": round(overall_score, 2),
-            "trait_scores": trait_scores,
-            "annotated_image_path": mock_annotated_path
-        }
-
+from services.analysis_service import AnalysisService # Correct import path
 
 # --- App Initialization ---
 app = FastAPI(title="Bovilens API")
@@ -73,14 +23,10 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- Middleware ---
-origins = [
-    "https://bovilens-frontend.onrender.com", # deployed frontend
-    "http://localhost:3000",                 # local dev
-    "http://127.0.0.1:3000"                  # alternative local
-]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -93,7 +39,6 @@ ANNOTATED_DIR = os.path.join(UPLOADS_DIR, "annotated")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(ANNOTATED_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
-
 
 # --- Global Analysis Service ---
 analysis_service = None
@@ -174,6 +119,7 @@ async def create_analysis(
         if analysis_service is None:
             raise HTTPException(status_code=500, detail="Analysis service not initialized.")
 
+        # CORRECTED: Calling the correct function name.
         analysis_result = analysis_service.run_analysis(file_path)
         if analysis_result is None:
             raise HTTPException(status_code=400, detail="Invalid image: No cattle or buffalo detected.")
@@ -183,12 +129,13 @@ async def create_analysis(
 
     user = await database.user_collection.find_one({"username": current_user.username})
 
+    # CORRECTED: Accessing dictionary keys directly.
     annotated_path = analysis_result["annotated_image_path"]
     annotated_url = (
         f"/uploads/annotated/{os.path.basename(annotated_path)}"
         if annotated_path else None
     )
-
+    # CORRECTED: Accessing dictionary keys directly.
     db_entry = {
         "user_id": str(user["_id"]),
         "animal_type": analysis_result["animal_type"],
@@ -213,6 +160,6 @@ async def get_analysis_history(current_user: models.TokenData = Depends(security
     history_cursor = database.analysis_collection.find(
         {"user_id": str(user["_id"])}
     ).sort("timestamp", -1).limit(5)
-
-    history_list = await history_cursor.to_list(length=None)
+    
+    history_list = await history_cursor.to_list(length=None) 
     return [models.AnalysisResult.model_validate(item) for item in history_list]
