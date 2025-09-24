@@ -1,7 +1,7 @@
 // NO IMPORT STATEMENT AT THE TOP
 
 // --- CONFIGURATION ---
-const API_BASE_URL = 'https://bovilens.onrender.com';
+const API_BASE_URL ='https://sih-pp45.onrender.com';
 
 // --- TRANSLATIONS ---
 const translations = {
