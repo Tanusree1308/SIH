@@ -13,8 +13,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain password against a hashed one."""
-    # Ensure the hashed password is in bytes for compatibility with bcrypt
     if isinstance(hashed_password, str):
         hashed_password = hashed_password.encode('utf-8')
     return pwd_context.verify(plain_password, hashed_password)
