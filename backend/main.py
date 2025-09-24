@@ -11,9 +11,10 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 
-import database, models, security, config
+import database, models, security, services, config
 from config import settings
-from services.analysis_service import AnalysisService # Correct import path
+from services.analysis_service import AnalysisService  # Adjust path if needed
+
 
 # --- App Initialization ---
 app = FastAPI(title="Bovilens API")
@@ -23,14 +24,9 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- Middleware ---
-origins = [
-    "https://bovilens-frontend.onrender.com", # deployed frontend
-    "http://localhost:3000",                  # local dev
-    "http://127.0.0.1:3000"                   # alternative local
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,13 +34,10 @@ app.add_middleware(
 
 # --- Uploads directory ---
 UPLOADS_DIR = "backend/uploads"
-ANNOTATED_DIR = os.path.join(UPLOADS_DIR, "annotated")
-
 os.makedirs(UPLOADS_DIR, exist_ok=True)
-os.makedirs(ANNOTATED_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
-# --- Global Analysis Service ---
+# --- Global Analysis Service (load models once) ---
 analysis_service = None
 
 @app.on_event("startup")
@@ -58,6 +51,7 @@ async def startup_event():
         raise
 
 
+# --- API Endpoints ---
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Bovilens API"}
@@ -70,14 +64,14 @@ async def register_user(user: models.UserCreate, request: Request):
     existing_user = await database.user_collection.find_one({"username": user.username})
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered")
-
+    
     hashed_password = security.get_password_hash(user.password)
     user_dict = user.model_dump()
     user_dict["hashed_password"] = hashed_password
     del user_dict["password"]
-
-    await database.user_collection.insert_one(user_dict)
-    created_user = await database.user_collection.find_one({"username": user.username})
+    
+    new_user = await database.user_collection.insert_one(user_dict)
+    created_user = await database.user_collection.find_one({"_id": new_user.inserted_id})
     return models.UserInResponse.model_validate(created_user)
 
 
@@ -87,7 +81,7 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
     user = await database.user_collection.find_one({"username": form_data.username})
     if not user or not security.verify_password(form_data.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
-
+    
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
         data={"sub": user["username"]},
@@ -96,12 +90,39 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+# --- User Routes ---
 @app.get("/users/me", response_model=models.UserInResponse)
 async def read_users_me(current_user: models.TokenData = Depends(security.get_current_user)):
     user = await database.user_collection.find_one({"username": current_user.username})
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return models.UserInResponse.model_validate(user)
+
+
+@app.put("/users/me", response_model=models.UserInResponse)
+async def update_user_me(user_update: models.UserBase, current_user: models.TokenData = Depends(security.get_current_user)):
+    user = await database.user_collection.find_one({"username": current_user.username})
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    update_data = user_update.model_dump(exclude_unset=True)
+    if "username" in update_data:
+        del update_data["username"]
+
+    await database.user_collection.update_one({"_id": user["_id"]}, {"$set": update_data})
+    updated_user = await database.user_collection.find_one({"_id": user["_id"]})
+    return models.UserInResponse.model_validate(updated_user)
+
+
+@app.put("/users/me/password")
+async def change_user_password(password_data: models.PasswordChange, current_user: models.TokenData = Depends(security.get_current_user)):
+    user = await database.user_collection.find_one({"username": current_user.username})
+    if not user or not security.verify_password(password_data.current_password, user["hashed_password"]):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+
+    hashed_password = security.get_password_hash(password_data.new_password)
+    await database.user_collection.update_one({"_id": user["_id"]}, {"$set": {"hashed_password": hashed_password}})
+    return {"message": "Password updated successfully"}
 
 
 # --- Analysis Routes ---
@@ -112,44 +133,45 @@ async def create_analysis(
     file: UploadFile = File(...),
     current_user: models.TokenData = Depends(security.get_current_user)
 ):
+    # Save uploaded file
     file_extension = file.filename.split(".")[-1]
     unique_filename = f"{uuid.uuid4()}.{file_extension}"
     file_path = os.path.join(UPLOADS_DIR, unique_filename)
-
+    
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
+    # Run analysis
     try:
         if analysis_service is None:
             raise HTTPException(status_code=500, detail="Analysis service not initialized.")
-
-        # CORRECTED: Calling the correct function name.
-        analysis_result = analysis_service.run_analysis(file_path)
+        
+        analysis_result = analysis_service.run_full_analysis(file_path)
         if analysis_result is None:
-            raise HTTPException(status_code=400, detail="Invalid image: No cattle or buffalo detected.")
+            raise HTTPException(status_code=400, detail="Invalid image: No cattle or buffalo could be detected.")
+    except HTTPException as e:
+        raise e
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
+    # Prepare DB entry
     user = await database.user_collection.find_one({"username": current_user.username})
-
-    # CORRECTED: Accessing dictionary keys directly.
     annotated_path = analysis_result["annotated_image_path"]
-    annotated_url = (
-        f"/uploads/annotated/{os.path.basename(annotated_path)}"
-        if annotated_path else None
-    )
-    # CORRECTED: Accessing dictionary keys directly.
+    annotated_filename = os.path.basename(annotated_path)
+    base_url = "https://bovilens.onrender.com/uploads"
+    annotated_url = f"{base_url}/{annotated_filename}"
+
     db_entry = {
         "user_id": str(user["_id"]),
-        "animal_type": analysis_result["animal_type"],
+        "animal_type": analysis_result["class_name"],
         "original_image_url": unique_filename,
-        "annotated_image_url": annotated_url,
-        "overall_score": analysis_result["overall_score"],
-        "trait_scores": analysis_result["trait_scores"],
+        "annotated_image_url": annotated_filename,
+        "overall_score": analysis_result["scores"]["overall_score"],
+        "trait_scores": analysis_result["scores"]["trait_scores"],
         "timestamp": datetime.now(timezone.utc)
     }
-
+    
     inserted_doc = await database.analysis_collection.insert_one(db_entry)
     created_analysis = await database.analysis_collection.find_one({"_id": inserted_doc.inserted_id})
     return models.AnalysisResult.model_validate(created_analysis)
@@ -157,6 +179,9 @@ async def create_analysis(
 
 @app.get("/analysis/history", response_model=list[models.AnalysisResult])
 async def get_analysis_history(current_user: models.TokenData = Depends(security.get_current_user)):
+    """
+    Fetches the 5 most recent analysis results for the currently authenticated user.
+    """
     user = await database.user_collection.find_one({"username": current_user.username})
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
