@@ -15,14 +15,23 @@ from slowapi.util import get_remote_address
 import database, models, security, config
 from config import settings
 
-# --- MOCK Analysis Service ---
+# --- MOCK Analysis Service (You will replace this) ---
 class AnalysisService:
-    def _init_(self):
+    def __init__(self):
         print("✅ AnalysisService initialized.")
+        pass
 
     def run_analysis(self, file_path: str):
+        """
+        This is the method that was missing. It now contains mock logic
+        to simulate your deep learning model's output.
+
+        You will replace the contents of this function with your actual
+        YOLOv8, MediaPipe, and measurement/scoring logic.
+        """
         print(f"Simulating analysis for file: {file_path}")
 
+        # 1. Simulate Measurement Calculation
         measurements = {
             "height_at_withers": f"{np.random.randint(120, 180)} cm",
             "body_length": f"{np.random.randint(150, 220)} cm",
@@ -30,14 +39,18 @@ class AnalysisService:
             "rump_angle": f"{np.random.randint(5, 25)} degrees"
         }
 
-        trait_scores = {
-            "trait_1": np.random.randint(1, 6),
-            "trait_2": np.random.randint(1, 6),
-            "trait_3": np.random.randint(1, 6),
-            "trait_4": np.random.randint(1, 6)
-        }
-        overall_score = sum(trait_scores.values()) / len(trait_scores)
+        # 2. Simulate ATC Scores (1-5) as a list of dictionaries
+        # CORRECTED: This now returns a list to match the Pydantic model
+        trait_scores = [
+            {"trait_name": "Body Length", "score": np.random.randint(1, 6)},
+            {"trait_name": "Withers Height", "score": np.random.randint(1, 6)},
+            {"trait_name": "Chest Depth", "score": np.random.randint(1, 6)},
+            {"trait_name": "Body Width", "score": np.random.randint(1, 6)},
+        ]
 
+        overall_score = sum(item['score'] for item in trait_scores) / len(trait_scores)
+
+        # 3. Simulate an annotated image path
         mock_annotated_path = os.path.join(UPLOADS_DIR, "annotated", "mock_annotated_image.png")
         if not os.path.exists(os.path.dirname(mock_annotated_path)):
             os.makedirs(os.path.dirname(mock_annotated_path))
@@ -61,9 +74,9 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- Middleware ---
 origins = [
-    "https://bovilens-frontend.onrender.com",  # deployed frontend
-    "http://localhost:3000",                   # local dev
-    "http://127.0.0.1:3000"                    # alternative local
+    "https://bovilens-frontend.onrender.com", # deployed frontend
+    "http://localhost:3000",                 # local dev
+    "http://127.0.0.1:3000"                  # alternative local
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -88,8 +101,12 @@ analysis_service = None
 @app.on_event("startup")
 async def startup_event():
     global analysis_service
-    analysis_service = AnalysisService()
-    print("✅ AnalysisService initialized and models loaded.")
+    try:
+        analysis_service = AnalysisService()
+        print("✅ AnalysisService initialized and models loaded.")
+    except Exception as e:
+        print(f"FATAL: Could not initialize AnalysisService: {e}")
+        raise
 
 
 @app.get("/")
@@ -185,3 +202,17 @@ async def create_analysis(
     inserted_doc = await database.analysis_collection.insert_one(db_entry)
     created_analysis = await database.analysis_collection.find_one({"_id": inserted_doc.inserted_id})
     return models.AnalysisResult.model_validate(created_analysis)
+
+
+@app.get("/analysis/history", response_model=list[models.AnalysisResult])
+async def get_analysis_history(current_user: models.TokenData = Depends(security.get_current_user)):
+    user = await database.user_collection.find_one({"username": current_user.username})
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    history_cursor = database.analysis_collection.find(
+        {"user_id": str(user["_id"])}
+    ).sort("timestamp", -1).limit(5)
+
+    history_list = await history_cursor.to_list(length=None)
+    return [models.AnalysisResult.model_validate(item) for item in history_list]
