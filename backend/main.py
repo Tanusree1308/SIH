@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 
-import database, models, security, services, config
+import database, models, security, config
 from config import settings
 from services.analysis_service import AnalysisService  # Adjust path if needed
 
@@ -25,8 +25,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- Middleware ---
 origins = [
-    "https://bovilens-frontend.onrender.com", # <-- PASTE YOUR FRONTEND URL HERE
-    # You can add http://localhost:8000 for future local testing if you want
+    "https://bovilens-frontend.onrender.com", # <-- FRONTEND URL
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -41,7 +40,7 @@ UPLOADS_DIR = "backend/uploads"
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
-# --- Global Analysis Service (load models once) ---
+# --- Global Analysis Service ---
 analysis_service = None
 
 @app.on_event("startup")
@@ -161,18 +160,21 @@ async def create_analysis(
 
     # Prepare DB entry
     user = await database.user_collection.find_one({"username": current_user.username})
+    
+    # --- MODIFIED LINE ONLY ---
     annotated_path = analysis_result["annotated_image_path"]
-    annotated_filename = os.path.basename(annotated_path)
-    base_url = "https://bovilens.onrender.com/uploads"
-    annotated_url = f"{base_url}/{annotated_filename}"
+    annotated_url = (
+        f"/uploads/annotated/{os.path.basename(annotated_path)}"
+        if annotated_path else None
+    )
 
     db_entry = {
         "user_id": str(user["_id"]),
-        "animal_type": analysis_result["class_name"],
+        "animal_type": analysis_result["animal_type"],  # fixed key
         "original_image_url": unique_filename,
-        "annotated_image_url": annotated_filename,
-        "overall_score": analysis_result["scores"]["overall_score"],
-        "trait_scores": analysis_result["scores"]["trait_scores"],
+        "annotated_image_url": annotated_url,
+        "overall_score": analysis_result["overall_score"],
+        "trait_scores": analysis_result["trait_scores"],
         "timestamp": datetime.now(timezone.utc)
     }
     
@@ -183,9 +185,6 @@ async def create_analysis(
 
 @app.get("/analysis/history", response_model=list[models.AnalysisResult])
 async def get_analysis_history(current_user: models.TokenData = Depends(security.get_current_user)):
-    """
-    Fetches the 5 most recent analysis results for the currently authenticated user.
-    """
     user = await database.user_collection.find_one({"username": current_user.username})
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
