@@ -8,9 +8,10 @@ motor
 pydantic[email]
 pydantic-settings
 
-# Security (Fixed for known compatibility)
+# Security
 passlib==1.7.4
 bcrypt==4.1.0
+python-jose[cryptography]
 
 # Configuration
 python-dotenv
@@ -23,6 +24,7 @@ python-dotenv
 # Image Processing
 opencv-python-headless
 Pillow
-
-# Machine Learning
 tensorflow
+
+# --- Add this line to fix the error ---
+slowapi
