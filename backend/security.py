@@ -1,3 +1,5 @@
+# backend/security.py
+
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from passlib.context import CryptContext
@@ -13,7 +15,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # OAuth2 token scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifies a plain password against a hashed one."""
     # This is the crucial fix. It ensures the hashed password is in bytes.
@@ -24,6 +25,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Hashes a password using bcrypt."""
+    # Fix for registration: encode the password to bytes before hashing.
+    if isinstance(password, str):
+        password = password.encode('utf-8')
     return pwd_context.hash(password)
 
 
